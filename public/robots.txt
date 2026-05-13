@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://autobrothers.pk/sitemap.xml

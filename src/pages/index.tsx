@@ -50,26 +50,12 @@ const serializeDoc = (doc: any) => {
   return result
 }
 
-export async function getServerSideProps() {
-  let initialProds: any[] = []
-  let initialCats: any[] = []
-  try {
-    const pSnap = await getDocs(query(collection(db, 'products'), orderBy('createdAt', 'desc')))
-    initialProds = pSnap.docs.map(serializeDoc)
-
-    const cSnap = await getDocs(collection(db, 'categories'))
-    initialCats = cSnap.docs.map(serializeDoc).filter((c: any) => c.active !== false)
-  } catch (e) {
-    console.error(e)
-  }
-  return { props: { initialProds, initialCats } }
-}
 
   
 
-export default function Home({ initialProds, initialCats }: { initialProds: any[]; initialCats: any[] }) {
-  const [prods, setProds] = useState(initialProds)
-  const [cats, setCats] = useState(initialCats)
+export default function Home() {
+const [prods, setProds] = useState([])
+const [cats, setCats] = useState([])
   const [menu, setMenu] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQ, setSearchQ] = useState('')

@@ -140,7 +140,7 @@ export default function Admin() {
   // ═══════ ADMIN DASHBOARD ═══════
   return (
     <>
-      <Head><title>Admin Panel | AutoBrothers</title></Head>
+      <Head><title>Admin Panel login | AutoBrothers</title></Head>
       <div className="min-h-screen bg-[#0A1929] p-4 md:p-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">

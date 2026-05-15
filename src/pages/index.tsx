@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Head from 'next/head'
 import Link from 'next/link'
 import { db } from '../lib/firebase'
-import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, getDocs } from 'firebase/firestore'
-import { Search, Menu, X, Phone, MessageCircle, Truck, ShieldCheck, Wrench, Clock, ChevronRight, ArrowRight, Shield, User, MapPin, Car, Send, ShoppingCart, Eye } from 'lucide-react'
+import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp } from 'firebase/firestore'
+import { Search, Menu, X, Phone, MessageCircle, Truck, ShieldCheck, Wrench, Clock, ChevronRight, ArrowRight, Shield, User, MapPin, Car, ShoppingCart, Eye } from 'lucide-react'
 import { useCart } from '../context/CartContext'
+import { motion, AnimatePresence } from 'framer-motion'
 
 const WA = '923222806245'
 const SITE_URL = 'https://autobrothers.pk'
@@ -23,9 +24,9 @@ const NAV = [
 ]
 
 const SERVICES = [
-  { i: Truck, t: 'Free Delivery', d: 'All over Pakistan' },
+  { i: Truck, t: 'delivery charges apply', d: 'All over Pakistan' },
   { i: ShieldCheck, t: '100% Original', d: 'Genuine Japan parts' },
-  { i: Wrench, t: 'Warranty', d: 'Checking warranty' },
+  { i: Wrench, t: 'Warranty', d: 'Checking warranty some parts' },
   { i: Clock, t: '24/7 Support', d: 'WhatsApp & Call' },
 ]
 
@@ -34,28 +35,10 @@ const condBadge = (c: string) => {
   if (c === 'Average') return 'bg-yellow-500/20 text-yellow-400'
   return 'bg-red-500/20 text-red-400'
 }
-// ✅ FIX: Ye function HAR Firebase Timestamp ko JSON mein convert karega
-const serializeDoc = (doc: any) => {
-  const data = doc.data()
-  const result: any = { id: doc.id }
-  for (const key in data) {
-    const val = data[key]
-    // Agar field ek Firebase Timestamp hai, toh ISO string bana do
-    if (val && typeof val.toDate === 'function') {
-      result[key] = val.toDate().toISOString()
-    } else {
-      result[key] = val
-    }
-  }
-  return result
-}
-
-
-  
 
 export default function Home() {
-const [prods, setProds] = useState([])
-const [cats, setCats] = useState([])
+  const [prods, setProds] = useState<any[]>([])
+  const [cats, setCats] = useState<any[]>([])
   const [menu, setMenu] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQ, setSearchQ] = useState('')
@@ -67,6 +50,91 @@ const [cats, setCats] = useState([])
   const [leadSaved, setLeadSaved] = useState(false)
   const [leadSaving, setLeadSaving] = useState(false)
   const [leadForm, setLeadForm] = useState({ name: '', phone: '', city: '', need: '' })
+  
+  // 🏎️ TURBO SPLASH STATE
+  const [showSplash, setShowSplash] = useState(true)
+  const [engineStarted, setEngineStarted] = useState(false)
+  const [activeLights, setActiveLights] = useState(0)
+  const audioRef = useRef<HTMLAudioElement>(null)
+
+  // 🏎️ Function to generate RPM Gauge Marks & SQUARE LED Lights
+  const generateRPMGauge = () => {
+    const marks = [];
+    const cx = 150, cy = 150, r = 120;
+    
+    for (let val = 0; val <= 8; val++) {
+      const angle = -120 + (val * 30);
+      const rad = (angle * Math.PI) / 180;
+      
+      const x1 = cx + r * Math.cos(rad);
+      const y1 = cy + r * Math.sin(rad);
+      const x2 = cx + (r - 15) * Math.cos(rad);
+      const y2 = cy + (r - 15) * Math.sin(rad);
+      marks.push(<line key={`l${val}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#333" strokeWidth="3" strokeLinecap="round" />);
+      
+      const textR = 88;
+      const tx = cx + textR * Math.cos(rad);
+      const ty = cy + textR * Math.sin(rad);
+      marks.push(<text key={`t${val}`} x={tx} y={ty} fill="#666" fontSize="16" fontWeight="bold" textAnchor="middle" dominantBaseline="central" fontFamily="sans-serif">{val}</text>);
+    }
+
+    // 🏎️ SQUARE LED LIGHTS (1 to 8)
+    for (let i = 1; i <= 8; i++) {
+      const angle = -120 + (i * 30);
+      const rad = (angle * Math.PI) / 180;
+      const lightR = 108;
+      const lx = cx + lightR * Math.cos(rad);
+      const ly = cy + lightR * Math.sin(rad);
+      
+      const isRed = i >= 6;
+      const isActive = i <= activeLights;
+
+      marks.push(
+        <rect 
+          key={`led${i}`}
+          x="-7" y="-7" 
+          width="14" height="14" 
+          rx="2"
+          transform={`translate(${lx}, ${ly}) rotate(${angle + 90})`}
+          fill={isActive ? (isRed ? "#FF3300" : "#00AAFF") : "#1a1a1a"} 
+          style={{ filter: isActive ? `drop-shadow(0 0 8px ${isRed ? '#FF3300' : '#00AAFF'})` : 'none', transition: 'all 0.1s ease-out' }}
+        />
+      );
+    }
+    
+    return marks;
+  }
+
+  // 🏎️ ENGINE START FUNCTION
+  const handleEngineStart = () => {
+    // 🔊 Play Sound from public folder
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().catch(e => console.log("Audio blocked:", e));
+    }
+    setEngineStarted(true);
+    
+    // 🏎️ Step-wise Animation (1 se 8 tak, phir wapas 1 par)
+    let step = 1;
+    const revUp = setInterval(() => {
+      setActiveLights(step);
+      step++;
+      if (step > 8) {
+        clearInterval(revUp);
+        setTimeout(() => {
+          let downStep = 8;
+          const revDown = setInterval(() => {
+            downStep--;
+            setActiveLights(downStep);
+            if (downStep <= 1) {
+              clearInterval(revDown);
+              setTimeout(() => setShowSplash(false), 500);
+            }
+          }, 100);
+        }, 800); 
+      }
+    }, 150);
+  }
 
   useEffect(() => {
     const unsub1 = onSnapshot(
@@ -80,40 +148,30 @@ const [cats, setCats] = useState([])
     const timer = setTimeout(() => {
       if (!localStorage.getItem('ab_lead')) setShowLead(true)
     }, 8000)
+    
     return () => { unsub1(); unsub2(); clearTimeout(timer) }
   }, [])
 
-  const closeLead = () => {
-    setShowLead(false)
-    localStorage.setItem('ab_lead', '1')
-  }
+  const closeLead = () => { setShowLead(false); localStorage.setItem('ab_lead', '1') }
 
   const saveLead = async () => {
     if (!leadForm.name.trim() || !leadForm.phone.trim()) return
     setLeadSaving(true)
     try {
-      await addDoc(collection(db, 'leads'), {
-        ...leadForm,
-        createdAt: serverTimestamp(),
-        source: 'popup',
-      })
+      await addDoc(collection(db, 'leads'), { ...leadForm, createdAt: serverTimestamp(), source: 'popup' })
       setLeadSaved(true)
       setTimeout(closeLead, 2500)
-    } catch {
-      alert('Error')
-    }
+    } catch { alert('Error') }
     setLeadSaving(false)
   }
 
-  const featured = prods.filter(p => p.featured).slice(0, 6)
+  const featured = prods.filter((p: any) => p.featured).slice(0, 6)
 
-  const filtered = prods.filter(p => {
+  const filtered = prods.filter((p: any) => {
     const mc = filterCat === 'all' || p.category === filterCat
-    const ms = !searchQ ||
-      (p.title || '').toLowerCase().includes(searchQ.toLowerCase()) ||
-      (p.description || '').toLowerCase().includes(searchQ.toLowerCase())
+    const ms = !searchQ || (p.title || '').toLowerCase().includes(searchQ.toLowerCase()) || (p.description || '').toLowerCase().includes(searchQ.toLowerCase())
     return mc && ms
-  }).sort((a, b) => {
+  }).sort((a: any, b: any) => {
     const pa = Number((a.price || '').replace(/[^\d]/g, '')) || 0
     const pb = Number((b.price || '').replace(/[^\d]/g, '')) || 0
     if (sort === 'low') return pa - pb
@@ -130,8 +188,120 @@ const [cats, setCats] = useState([])
         <meta property="og:title" content="AutoBrothers | Used Auto Parts Pakistan" />
         <meta property="og:description" content="Quality used auto parts. Japan imported. Free delivery." />
         <meta name="robots" content="index, follow" />
+        <script
+  type="application/ld+json"
+  dangerouslySetInnerHTML={{
+    __html: JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": ["LocalBusiness", "Store"],
+      "name": "AutoBrothers - Used Engines & Gearboxes",
+      "url": "https://autobrothers.pk",
+      "image": "https://autobrothers.pk/logo.png",
+      "telephone": "+923222806245",
+      "description": "Used Japanese car engines, gearboxes, alternators and auto parts in Pakistan. Tested and imported quality parts.",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "Shershah Market, SITE Area",
+        "addressLocality": "Karachi",
+        "addressCountry": "PK"
+      },
+      "areaServed": "Pakistan",
+      "priceRange": "Rs",
+      "sameAs": [],
+      "department": {
+        "@type": "AutoRepair",
+        "name": "Used Engine & Gear Division"
+      }
+    })
+  }}
+/>
       </Head>
 
+      {/* 🎵 Audio Tag */}
+      <audio ref={audioRef} src="/car-start.mp3" preload="auto" />
+
+      {/* ═══════ 🏎️ LED RPM SPLASH SCREEN ═══════ */}
+      <AnimatePresence>
+        {showSplash && (
+          <motion.div 
+            key="splash"
+            exit={{ opacity: 0, scale: 1.1 }}
+            transition={{ duration: 0.6, ease: 'easeInOut' }}
+            className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center overflow-hidden"
+          >
+            {/* Background Glow */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: activeLights > 5 ? 0.4 : 0.1 }}
+              transition={{ duration: 0.5 }}
+              className="absolute w-96 h-96 rounded-full blur-[150px]"
+              style={{ backgroundColor: activeLights > 5 ? '#FF3300' : '#00AAFF' }}
+            />
+
+            {/* RPM Gauge SVG */}
+            <div className="relative z-10 w-72 h-72 md:w-96 md:h-96">
+              <svg viewBox="0 0 300 300" className="w-full h-full drop-shadow-2xl">
+                <circle cx="150" cy="150" r="145" fill="#080808" stroke="#222" strokeWidth="6" />
+                <circle cx="150" cy="150" r="138" fill="#050505" />
+                {generateRPMGauge()}
+                <text x="150" y="175" textAnchor="middle" fill="#555" fontSize="9" fontWeight="bold" letterSpacing="2">RPM x1000</text>
+              </svg>
+            </div>
+
+            {/* Title */}
+            <motion.div 
+              initial={{ y: 30, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.3, duration: 0.5 }}
+              className="text-3xl md:text-5xl font-black text-white relative z-10 mt-6"
+            >
+              AUTO<span className="text-[#F5A623]">BROTHERS</span>
+            </motion.div>
+            
+            {/* 🏎️ REALISTIC ENGINE START/STOP BUTTON */}
+            {!engineStarted ? (
+              <motion.button 
+                onClick={handleEngineStart}
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.6 }}
+                whileHover={{ scale: 1.05, boxShadow: "0px 0px 30px rgba(255, 0, 0, 0.4)" }}
+                whileTap={{ scale: 0.95 }}
+                className="relative z-10 mt-8 w-36 h-36 md:w-44 md:h-44 rounded-full flex items-center justify-center cursor-pointer group focus:outline-none"
+                style={{
+                  // Chrome Metallic Ring Effect
+                  background: "conic-gradient(from 0deg, #555, #222, #888, #333, #666, #111, #777, #222, #555)",
+                  padding: '8px'
+                }}
+              >
+                {/* Inner Dark Face of Button */}
+                <div className="w-full h-full rounded-full bg-[#111] flex flex-col items-center justify-center relative border-2 border-gray-800 shadow-inner">
+                  
+                  {/* Red Glow Halo behind text */}
+                  <div className="absolute w-20 h-20 bg-red-600 rounded-full blur-2xl opacity-30 group-hover:opacity-70 transition-opacity duration-300"></div>
+                  
+                  {/* Text Lines */}
+                  <span className="relative text-[10px] md:text-xs font-extrabold tracking-[0.3em] text-red-500" style={{ textShadow: '0 0 8px rgba(239, 68, 68, 0.8)' }}>ENGINE</span>
+                  <span className="relative text-[10px] md:text-xs font-extrabold tracking-[0.3em] text-red-500 mt-1" style={{ textShadow: '0 0 8px rgba(239, 68, 68, 0.8)' }}>START</span>
+                  <span className="relative text-[10px] md:text-xs font-extrabold tracking-[0.3em] text-red-500 mt-1" style={{ textShadow: '0 0 8px rgba(239, 68, 68, 0.8)' }}>STOP</span>
+                  
+                </div>
+              </motion.button>
+            ) : (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-sm text-gray-400 mt-6 relative z-10 tracking-widest uppercase"
+              >
+                Pakistan's Trusted Auto Parts
+              </motion.p>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ═══════ MAIN WEBSITE ═══════ */}
+      
       {/* NAV */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0A1929]/95 backdrop-blur-md border-b border-[#1E3A52]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
@@ -236,10 +406,10 @@ const [cats, setCats] = useState([])
           <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 h-full flex items-center">
             <div className="max-w-xl">
               <span className="inline-block text-[10px] font-bold tracking-[0.25em] uppercase text-[#F5A623] bg-[#F5A623]/10 px-3 py-1.5 rounded-full mb-5 border border-[#F5A623]/20">🇵🇰 Pakistan Delivery</span>
-              <h1 className="font-extrabold text-4xl sm:text-5xl md:text-6xl leading-[1.08] mb-4">QUALITY USED<br /><span className="text-[#F5A623]">AUTO PARTS</span></h1>
+              <h2 className="font-extrabold text-4xl sm:text-5xl md:text-6xl leading-[1.08] mb-4">AUTOBROTHERS.PK<br /><span className="text-[#F5A623]">AUTO PARTS</span></h2>
               <p className="text-gray-400 text-sm md:text-base mb-6 max-w-md">Engines, gearboxes, alternators — original quality. Japan imported, tested & warranted.</p>
               <div className="flex flex-wrap gap-3">
-                <a href="#products" className="inline-flex items-center gap-2 bg-[#F5A623] hover:bg-[#D4911E] text-[#0A1929] font-bold px-7 py-3.5 rounded-xl hover:scale-105 transition-all text-sm">Shop Now <ArrowRight size={16} /></a>
+                <a href="#categories" className="inline-flex items-center gap-2 bg-[#F5A623] hover:bg-[#D4911E] text-[#0A1929] font-bold px-7 py-3.5 rounded-xl hover:scale-105 transition-all text-sm">Shop Now <ArrowRight size={16} /></a>
                 <a href={waLink('AutoBrothers')} target="_blank" className="inline-flex items-center gap-2 bg-[#25D366] hover:bg-green-600 text-white font-bold px-7 py-3.5 rounded-xl hover:scale-105 transition-all text-sm"><MessageCircle size={16} /> WhatsApp</a>
               </div>
             </div>
@@ -311,7 +481,7 @@ const [cats, setCats] = useState([])
               {cats.map(c => (
                 <button key={c.id} onClick={() => { setFilterCat(c.name); document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }) }} className="bg-[#13293D] border border-[#1E3A52] rounded-xl overflow-hidden hover:border-[#F5A623]/40 transition-all group">
                   <div className="aspect-[4/3] overflow-hidden">
-                    <img src={c.image || `https://picsum.photos/seed/${c.name.replace(/\s/g, '').toLowerCase()}/400/300`} alt={c.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-60 group-hover:opacity-80" />
+                    <img src={c.image || `https://picsum.photos/seed/${c.name.replace(/\s/g, '').toLowerCase()}/400/300`} alt={c.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90 group-hover:opacity-100" />
                   </div>
                   <div className="p-3 text-center">
                     <div className="text-xl mb-1">{c.icon}</div>

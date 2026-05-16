@@ -56,6 +56,7 @@ export default function Home() {
   const [engineStarted, setEngineStarted] = useState(false)
   const [activeLights, setActiveLights] = useState(0)
   const audioRef = useRef<HTMLAudioElement>(null)
+  const [showSocialPopup, setShowSocialPopup] = useState(false)
 
   // 🏎️ Function to generate RPM Gauge Marks & SQUARE LED Lights
   const generateRPMGauge = () => {
@@ -106,15 +107,13 @@ export default function Home() {
   }
 
   // 🏎️ ENGINE START FUNCTION
-  const handleEngineStart = () => {
-    // 🔊 Play Sound from public folder
+   const handleEngineStart = () => {
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
       audioRef.current.play().catch(e => console.log("Audio blocked:", e));
     }
     setEngineStarted(true);
     
-    // 🏎️ Step-wise Animation (1 se 8 tak, phir wapas 1 par)
     let step = 1;
     const revUp = setInterval(() => {
       setActiveLights(step);
@@ -128,7 +127,13 @@ export default function Home() {
             setActiveLights(downStep);
             if (downStep <= 1) {
               clearInterval(revDown);
-              setTimeout(() => setShowSplash(false), 500);
+              setTimeout(() => {
+                setShowSplash(false);
+                // ✅ NAYA LOGIC: Splash band hone ke baad social popup dikhana (Agar pehle close na kiya gaya ho)
+                if (!localStorage.getItem('ab_social_closed')) {
+                  setShowSocialPopup(true);
+                }
+              }, 500);
             }
           }, 100);
         }, 800); 
@@ -301,7 +306,72 @@ export default function Home() {
       </AnimatePresence>
 
       {/* ═══════ MAIN WEBSITE ═══════ */}
-      
+
+            {/* ═══════ SOCIAL FOLLOW POPUP ═══════ */}
+      <AnimatePresence>
+        {showSocialPopup && (
+          <motion.div 
+            key="social-popup"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[190] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => { setShowSocialPopup(false); localStorage.setItem('ab_social_closed', '1'); }}
+          >
+            <motion.div 
+              initial={{ scale: 0.8, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.8, y: 20, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 20 }}
+              className="relative w-full max-w-sm bg-[#13293D] border border-[#1E3A52] rounded-2xl p-6 text-center shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Close Button */}
+              <button 
+                onClick={() => { setShowSocialPopup(false); localStorage.setItem('ab_social_closed', '1'); }} 
+                className="absolute top-3 right-3 text-gray-500 hover:text-white transition-colors"
+              >
+                <X size={18} />
+              </button>
+              
+              <div className="text-4xl mb-3">🏁</div>
+              <h3 className="text-xl font-bold text-white">Join Our Garage!</h3>
+              <p className="text-xs text-gray-400 mt-1 mb-5">Latest parts, deals & auto tips ke liye follow karein.</p>
+              
+              <div className="flex flex-col gap-3">
+                {/* Instagram Button */}
+                <a
+                  href="https://www.instagram.com/autobrothers.pk/" // ⚠️ Yahan apna Instagram URL daalein
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 via-pink-500 to-orange-400 hover:opacity-90 text-white font-bold py-3 rounded-xl text-sm transition-all shadow-lg shadow-pink-500/20"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+                  Follow on Instagram
+                </a>
+                
+                {/* Facebook Button */}
+                <a
+                  href="https://www.facebook.com/profile.php?id=100064020401353" // ⚠️ Yahan apna Facebook URL daalein
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-2 bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold py-3 rounded-xl text-sm transition-all shadow-lg shadow-blue-500/20"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                  Follow on Facebook
+                </a>
+              </div>
+              
+              <button 
+                onClick={() => { setShowSocialPopup(false); localStorage.setItem('ab_social_closed', '1'); }} 
+                className="mt-4 text-[11px] text-gray-600 hover:text-gray-400 transition-colors"
+              >
+                Skip for now
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* NAV */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0A1929]/95 backdrop-blur-md border-b border-[#1E3A52]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
@@ -569,6 +639,100 @@ export default function Home() {
             <div className="grid grid-cols-3 gap-3">
               {[{ v: '3000+', l: 'Customers' }, { v: '5000+', l: 'Sold' }, { v: '5+', l: 'Years' }].map((s, i) => <div key={i} className="bg-[#13293D] border border-[#1E3A52] rounded-xl p-3 text-center"><div className="text-lg font-extrabold text-[#F5A623]">{s.v}</div><div className="text-[10px] text-gray-500">{s.l}</div></div>)}
             </div>
+          </div>
+        </div>
+      </section>
+      
+            {/* SOCIAL PAGES */}
+      <section className="py-14 md:py-20 border-t border-[#1E3A52]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="text-center mb-8">
+            <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-[#F5A623]">Stay Connected</span>
+            <h2 className="text-2xl md:text-3xl font-bold mt-1">Follow Our Pages</h2>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+            
+            {/* ✅ FACEBOOK CARD */}
+            <div className="bg-[#13293D] border border-[#1E3A52] rounded-2xl overflow-hidden">
+              <div className="flex items-center gap-3 p-4 border-b border-[#1E3A52]">
+                <div className="w-10 h-10 rounded-full bg-[#1877F2] flex items-center justify-center flex-none">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-bold text-white truncate">AutoBrothers</h4>
+                  <p className="text-[10px] text-gray-500">Facebook Page</p>
+                </div>
+                <a href="https://www.facebook.com/profile.php?id=100064020401353" target="_blank" className="bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold px-4 py-1.5 rounded-lg text-[11px]">Follow</a>
+              </div>
+              
+              <div className="relative bg-[#1a1a1a] flex items-center justify-center overflow-hidden" style={{ height: '300px' }}>
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 bg-[#0D1F30] z-0">
+                  <div className="w-16 h-16 rounded-full bg-[#1877F2] flex items-center justify-center mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="white"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                  </div>
+                  <h4 className="text-white font-bold text-lg">AutoBrothers</h4>
+                  <p className="text-gray-400 text-xs mt-1 mb-5">Visit our Facebook Page</p>
+                  <a href="https://www.facebook.com/profile.php?id=100064020401353" target="_blank" className="bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold px-6 py-2 rounded-lg text-sm inline-flex items-center gap-2">
+                    Open Facebook
+                  </a>
+                </div>
+
+                <iframe 
+                  src="https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Fprofile.php%3Fid%3D100064020401353&tabs=timeline&width=340&height=300&small_header=true&adapt_container_width=true&hide_cover=false&show_facepile=true" 
+                  width="340" 
+                  height="300" 
+                  style={{border:'none', overflow:'hidden', position:'relative', zIndex: '10', background: 'white'}} 
+                  scrolling="no" 
+                  frameBorder="0" 
+                  allowFullScreen={true}
+                  allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share">
+                </iframe>
+              </div>
+            </div>
+
+            {/* ✅ INSTAGRAM CARD (Official Embed Look) */}
+            <div className="bg-[#13293D] border border-[#1E3A52] rounded-2xl overflow-hidden">
+              <div className="flex items-center gap-3 p-4 border-b border-[#1E3A52]">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 flex items-center justify-center flex-none">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  {/* ⚠️ APNA INSTAGRAM USERNAME YAHAN LIKHEIN */}
+                  <h4 className="text-sm font-bold text-white truncate">autobrothers.pk</h4>
+                  <p className="text-[10px] text-gray-500">Instagram Page</p>
+                </div>
+                {/* ⚠️ APNA INSTAGRAM LINK YAHAN DAALEIN */}
+                <a href="https://instagram.com/autobrothers.pk" target="_blank" className="bg-gradient-to-r from-purple-600 via-pink-500 to-orange-400 hover:opacity-90 text-white font-bold px-4 py-1.5 rounded-lg text-[11px] cursor-pointer">Follow</a>
+              </div>
+              
+              {/* Instagram Profile & Visit Page Area */}
+              <div className="relative flex flex-col items-center justify-center text-center p-6 bg-gradient-to-br from-[#13293D] to-[#0A1929]" style={{ height: '300px' }}>
+                <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'url(https://i.ibb.co/84814xg5/b16b-5542697ff3a9c-1296x.webp)', backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+                
+                <div className="relative z-10 w-full">
+                  <div className="w-24 h-24 rounded-full border-4 border-pink-500 p-1 mx-auto mb-4 shadow-lg shadow-pink-500/20">
+                    <img src={LOGO_URL} alt="IG Profile" className="w-full h-full rounded-full object-cover" />
+                  </div>
+                  <h3 className="text-lg font-bold text-white">AutoBrothers.Pk</h3>
+                  <p className="text-xs text-gray-400 mt-1 mb-4">🇵🇰 Japan Imported Auto Parts</p>
+                  
+                  {/* Stats */}
+                  <div className="flex items-center justify-center gap-6 mb-5">
+                    <div><span className="font-bold text-white text-sm">540</span><p className="text-[9px] text-gray-500">Posts</p></div>
+                    <div><span className="font-bold text-white text-sm">10.5K</span><p className="text-[9px] text-gray-500">Followers</p></div>
+                    <div><span className="font-bold text-white text-sm">150</span><p className="text-[9px] text-gray-500">Following</p></div>
+                  </div>
+                  
+                  {/* ⚠️ APNA INSTAGRAM LINK YAHAN BHI DAALEIN */}
+                  <a href="https://instagram.com/autobrothers.pk" target="_blank" className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-600 via-pink-500 to-orange-400 text-white font-bold px-8 py-2.5 rounded-xl text-sm shadow-lg shadow-pink-500/20 hover:scale-105 transition-transform cursor-pointer">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" x2="21" y1="14" y2="3"/></svg>
+                    Visit Page
+                  </a>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       </section>

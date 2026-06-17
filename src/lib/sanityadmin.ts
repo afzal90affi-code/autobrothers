@@ -1,24 +1,29 @@
-import { createClient } from '@sanity/client';
-import imageUrlBuilder from '@sanity/image-url';
+import { createClient } from "@sanity/client"
+import imageUrlBuilder from "@sanity/image-url"
+
+// Hardcoded for reliability - public values, no security risk
+const projectId = "nub55wmw"
+const dataset = "production"
 
 // Read Client (Public - Website ke liye)
 export const client = createClient({
-  projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || 'nub55wmw',
-  dataset: process.env.NEXT_PUBLIC_SANITY_DATASET || 'production',
-  apiVersion: '2024-01-01',
+  projectId,
+  dataset,
+  apiVersion: "2024-01-01",
   useCdn: false,
-});
+})
 
 // Write Client (Admin Panel ke liye)
 export const writeClient = createClient({
-  projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || 'nub55wmw',
-  dataset: process.env.NEXT_PUBLIC_SANITY_DATASET || 'production',
-  apiVersion: '2024-01-01',
+  projectId,
+  dataset,
+  apiVersion: "2024-01-01",
   useCdn: false,
   token: process.env.SANITY_API_TOKEN,
-});
+})
 
-const builder = imageUrlBuilder(client);
+const builder = imageUrlBuilder(client)
+
 export function urlFor(source: any) {
-  return builder.image(source);
+  return builder.image(source)
 }

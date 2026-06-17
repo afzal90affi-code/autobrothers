@@ -1,0 +1,5 @@
+
+> autobrothers@1.0.0 build
+> next build *
+
+ ⨯ Invalid project directory provided, no such directory: C:\Users\win10\Desktop\autobrothers.pk\autobrothers\*

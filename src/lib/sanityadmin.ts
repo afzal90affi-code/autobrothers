@@ -1,11 +1,9 @@
 import { createClient } from "@sanity/client"
 import imageUrlBuilder from "@sanity/image-url"
 
-// Hardcoded for reliability - public values, no security risk
 const projectId = "nub55wmw"
 const dataset = "production"
 
-// Read Client (Public - Website ke liye)
 export const client = createClient({
   projectId,
   dataset,
@@ -13,7 +11,6 @@ export const client = createClient({
   useCdn: false,
 })
 
-// Write Client (Admin Panel ke liye)
 export const writeClient = createClient({
   projectId,
   dataset,

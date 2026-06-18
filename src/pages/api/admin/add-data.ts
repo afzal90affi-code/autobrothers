@@ -1,19 +1,17 @@
 import type { NextApiRequest, NextApiResponse } from "next"
 import { createClient } from "@sanity/client"
 
-// Secure Server-side Sanity Client
 const serverClient = createClient({
-  projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || "",
-  dataset: process.env.NEXT_PUBLIC_SANITY_DATASET || "production",
+  projectId: "nub55wmw",
+  dataset: "production",
   apiVersion: "2024-01-01",
   useCdn: false,
   token: process.env.SANITY_API_TOKEN,
 })
 
-// Allow up to 20MB body size for multiple images
 export const config = {
   api: {
-    bodyParser: { sizeLimit: "4mb" },
+    bodyParser: { sizeLimit: "10mb" },
   },
 }
 
@@ -36,17 +34,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       inStock,
       description,
       model,
-      // Single image (legacy support — for category/subcategory)
       imageData,
       fileName,
-      // Multi-image (new — for products)
       imagesData,
     } = req.body
 
     let imageAsset = null
     let imageAssetsArray: any[] = []
 
-    // 1. SINGLE IMAGE UPLOAD (Category / Subcategory)
+    // Single Image Upload
     if (imageData && fileName) {
       const base64Data = imageData.replace(/^data:image\/\w+;base64,/, "")
       const buffer = Buffer.from(base64Data, "base64")
@@ -55,7 +51,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
     }
 
-    // 2. MULTI IMAGE UPLOAD (Products)
+    // Multi Image Upload (for products)
     if (imagesData && Array.isArray(imagesData) && imagesData.length > 0) {
       for (const img of imagesData) {
         if (img.data && img.fileName) {
@@ -72,7 +68,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    // 3. Build Document
     let docToCreate: any = {}
 
     if (type === "category") {
@@ -96,7 +91,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           : undefined,
       }
     } else if (type === "product") {
-      // Use multi-image array if provided, else fall back to single image
       const finalImages =
         imageAssetsArray.length > 0
           ? imageAssetsArray

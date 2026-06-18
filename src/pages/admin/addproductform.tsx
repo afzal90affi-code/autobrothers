@@ -327,36 +327,71 @@ export default function AddProductForm({ onClose }: { onClose: () => void }) {
             />
           </div>
 
-          {/* Toggles */}
-          <div className="space-y-2 bg-[#13293D] border border-[#1E3A52] rounded-xl p-3">
-            <label className="flex items-center justify-between text-sm cursor-pointer">
-              <span className="text-gray-300">In Stock</span>
-              <input
-                type="checkbox"
-                checked={inStock}
-                onChange={(e) => setInStock(e.target.checked)}
-                className="accent-[#F5A623] w-4 h-4"
-              />
-            </label>
-            <label className="flex items-center justify-between text-sm cursor-pointer">
-              <span className="text-gray-300">Featured Product</span>
-              <input
-                type="checkbox"
-                checked={featured}
-                onChange={(e) => setFeatured(e.target.checked)}
-                className="accent-[#F5A623] w-4 h-4"
-              />
-            </label>
-            <label className="flex items-center justify-between text-sm cursor-pointer">
-              <span className="text-gray-300">New Arrival</span>
-              <input
-                type="checkbox"
-                checked={newArrival}
-                onChange={(e) => setNewArrival(e.target.checked)}
-                className="accent-[#F5A623] w-4 h-4"
-              />
-            </label>
-          </div>
+          {/* Toggles - iOS Style Switches */}
+<div className="space-y-3 bg-[#13293D] border border-[#1E3A52] rounded-xl p-4">
+  {/* In Stock */}
+  <div className="flex items-center justify-between">
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-gray-300">In Stock</span>
+      {inStock && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">AVAILABLE</span>}
+    </div>
+    <label className="relative inline-flex items-center cursor-pointer">
+      <input
+        type="checkbox"
+        checked={inStock}
+        onChange={(e) => setInStock(e.target.checked)}
+        className="sr-only peer"
+      />
+      <div className="w-11 h-6 bg-[#1E3A52] rounded-full peer peer-checked:bg-emerald-500 transition-colors relative">
+        <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${inStock ? "translate-x-5" : "translate-x-0"}`}></div>
+      </div>
+    </label>
+  </div>
+
+  {/* Divider */}
+  <div className="h-px bg-[#1E3A52]"></div>
+
+  {/* Featured */}
+  <div className="flex items-center justify-between">
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-gray-300">Featured Product</span>
+      {featured && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#F5A623]/20 text-[#F5A623]">FEATURED</span>}
+    </div>
+    <label className="relative inline-flex items-center cursor-pointer">
+      <input
+        type="checkbox"
+        checked={featured}
+        onChange={(e) => setFeatured(e.target.checked)}
+        className="sr-only peer"
+      />
+      <div className="w-11 h-6 bg-[#1E3A52] rounded-full peer peer-checked:bg-[#F5A623] transition-colors relative">
+        <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${featured ? "translate-x-5" : "translate-x-0"}`}></div>
+      </div>
+    </label>
+  </div>
+
+  {/* Divider */}
+  <div className="h-px bg-[#1E3A52]"></div>
+
+  {/* New Arrival */}
+  <div className="flex items-center justify-between">
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-gray-300">New Arrival</span>
+      {newArrival && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">NEW</span>}
+    </div>
+    <label className="relative inline-flex items-center cursor-pointer">
+      <input
+        type="checkbox"
+        checked={newArrival}
+        onChange={(e) => setNewArrival(e.target.checked)}
+        className="sr-only peer"
+      />
+      <div className="w-11 h-6 bg-[#1E3A52] rounded-full peer peer-checked:bg-blue-500 transition-colors relative">
+        <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${newArrival ? "translate-x-5" : "translate-x-0"}`}></div>
+      </div>
+    </label>
+  </div>
+</div>
 
           {/* Save Button */}
           <button

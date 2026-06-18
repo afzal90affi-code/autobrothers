@@ -2,22 +2,23 @@ import type { NextApiRequest, NextApiResponse } from "next"
 import { createClient } from "@sanity/client"
 
 const serverClient = createClient({
-  projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || "",
-  dataset: process.env.NEXT_PUBLIC_SANITY_DATASET || "production",
+  projectId: "nub55wmw",
+  dataset: "production",
   apiVersion: "2024-01-01",
   useCdn: false,
   token: process.env.SANITY_API_TOKEN,
 })
 
-// 4MB limit (8 images x ~400KB each = ~3.2MB, plus JSON overhead)
 export const config = {
   api: {
-    bodyParser: { sizeLimit: "4mb" },
+    bodyParser: { sizeLimit: "10mb" },
   },
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "POST") return res.status(405).json({ message: "Method not allowed" })
+  if (req.method !== "POST") {
+    return res.status(405).json({ message: "Method not allowed" })
+  }
 
   try {
     const {
@@ -31,10 +32,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       inStock,
       description,
       model,
-      // Single image (legacy — for category/subcategory)
+      tag,
       imageData,
       fileName,
-      // Multi-image (new — for products)
       imagesData,
     } = req.body
 
@@ -52,16 +52,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         model,
       }
     } else if (type === "category") {
-      patchData = { title }
+      patchData = { title, tag }
     } else if (type === "subcategory") {
       patchData = { title }
     }
 
-    // ═══════ SINGLE IMAGE UPDATE (Category / Subcategory) ═══════
+    // Single Image Update
     if (imageData && fileName) {
       const base64Data = imageData.replace(/^data:image\/\w+;base64,/, "")
       const buffer = Buffer.from(base64Data, "base64")
-      const imageAsset = await serverClient.assets.upload("image", buffer, { filename: fileName })
+      const imageAsset = await serverClient.assets.upload("image", buffer, {
+        filename: fileName,
+      })
 
       if (type === "product") {
         patchData.images = [{ _type: "image", asset: { _type: "reference", _ref: imageAsset._id } }]
@@ -70,14 +72,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    // ═══════ MULTI-IMAGE UPDATE (Products) ═══════
+    // Multi Image Update (products)
     if (imagesData && Array.isArray(imagesData) && imagesData.length > 0) {
       const imageRefs = []
       for (const img of imagesData) {
         if (img.data && img.fileName) {
           const base64Data = img.data.replace(/^data:image\/\w+;base64,/, "")
           const buffer = Buffer.from(base64Data, "base64")
-          const asset = await serverClient.assets.upload("image", buffer, { filename: img.fileName })
+          const asset = await serverClient.assets.upload("image", buffer, {
+            filename: img.fileName,
+          })
           imageRefs.push({
             _type: "image",
             asset: { _type: "reference", _ref: asset._id },
@@ -85,10 +89,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
 
-      if (imageRefs.length > 0) {
-        if (type === "product") {
-          patchData.images = imageRefs
-        }
+      if (imageRefs.length > 0 && type === "product") {
+        patchData.images = imageRefs
       }
     }
 

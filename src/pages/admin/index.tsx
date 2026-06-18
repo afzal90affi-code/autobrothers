@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react"
 import Head from "next/head"
 import Link from "next/link"
 import { PlusCircle, LayoutGrid, Layers, Package, X, Upload, Loader2, Home, Trash2, Pencil } from "lucide-react"
-import { client } from "../../lib/sanityadmin"
 import { compressImage, compressMultipleImages } from "../../lib/imageCompress"
 
 const convertToBase64 = (file: File): Promise<string> => {
@@ -20,6 +19,7 @@ export default function AdminPanel() {
   const [subcats, setSubcats] = useState<any[]>([])
   const [prods, setProds] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [errorMsg, setErrorMsg] = useState("")
 
   const [showForm, setShowForm] = useState("")
   const [saving, setSaving] = useState(false)
@@ -36,7 +36,7 @@ export default function AdminPanel() {
   const [subCatParent, setSubCatParent] = useState("")
   const [subCatImage, setSubCatImage] = useState<File | null>(null)
 
-  // Product state
+  // Product state - MULTI-IMAGE
   const [prodTitle, setProdTitle] = useState("")
   const [prodPrice, setProdPrice] = useState("")
   const [prodCondition, setProdCondition] = useState("Good")
@@ -51,16 +51,36 @@ export default function AdminPanel() {
   const [dragActive, setDragActive] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // ═══════ DATA FETCHING (via API route - NO CORS) ═══════
   const fetchData = async () => {
+    setErrorMsg("")
+    setLoading(true)
     try {
-      const catData = await client.fetch(`*[_type == "category"] | order(_createdAt desc){_id, title, tag, "image": image.asset->url}`)
-      const subCatData = await client.fetch(`*[_type == "subcategory"] | order(_createdAt desc){_id, title, "parentTitle": parentCategory->title, "parentId": parentCategory->_id, "image": image.asset->url}`)
-      const prodData = await client.fetch(`*[_type == "product"] | order(_createdAt desc){_id, title, price, condition, featured, newArrival, description, "subCatTitle": subcategory->title, "subCatId": subcategory->_id, "image": images[0].asset->url}`)
-      setCats(catData)
-      setSubcats(subCatData)
-      setProds(prodData)
-    } catch (error) {
-      console.error("Fetch error:", error)
+      const [catRes, subRes, prodRes] = await Promise.all([
+        fetch("/api/get-data?type=categories"),
+        fetch("/api/get-data?type=subcategories"),
+        fetch("/api/get-data?type=products"),
+      ])
+
+      const [catJson, subJson, prodJson] = await Promise.all([
+        catRes.json(),
+        subRes.json(),
+        prodRes.json(),
+      ])
+
+      if (!catJson.success) throw new Error(catJson.error || "Categories fetch failed")
+      if (!subJson.success) throw new Error(subJson.error || "Subcategories fetch failed")
+      if (!prodJson.success) throw new Error(prodJson.error || "Products fetch failed")
+
+      setCats(catJson.data || [])
+      setSubcats(subJson.data || [])
+      setProds(prodJson.data || [])
+    } catch (err: any) {
+      console.error("Fetch error:", err)
+      setErrorMsg(err.message || "Unknown error")
+      setCats([])
+      setSubcats([])
+      setProds([])
     } finally {
       setLoading(false)
     }
@@ -70,7 +90,7 @@ export default function AdminPanel() {
     fetchData()
   }, [])
 
-  // Multi-image handlers with compression
+  // ═══════ MULTI-IMAGE HANDLERS (with compression) ═══════
   const handleProdFiles = async (files: FileList | null) => {
     if (!files) return
     const newFiles = Array.from(files).filter((file) => file.type.startsWith("image/"))
@@ -85,8 +105,8 @@ export default function AdminPanel() {
       const remaining = 8 - prodImages.length
       const toAdd = compressed.slice(0, remaining)
       const newPreviews = toAdd.map((file) => URL.createObjectURL(file))
-      setProdImages((prev) => [...prev, ...toAdd].slice(0, 8))
-      setProdImagePreviews((prev) => [...prev, ...newPreviews].slice(0, 8))
+      setProdImages((prev) => [...prev, ...toAdd])
+      setProdImagePreviews((prev) => [...prev, ...newPreviews])
     } catch (err) {
       console.error("Compression failed:", err)
       alert("Image compression failed. Please try smaller images.")
@@ -142,6 +162,24 @@ export default function AdminPanel() {
     setEditingId(null)
   }
 
+  // ═══════ SINGLE IMAGE HANDLER (Category/Subcategory with compression) ═══════
+  const handleSingleImage = async (file: File, setter: (f: File | null) => void) => {
+    setCompressing(true)
+    try {
+      const compressed = await compressImage(file, {
+        targetSizeKB: 400,
+        maxDimension: 1200,
+      })
+      setter(compressed)
+    } catch (err) {
+      console.error(err)
+      setter(file)
+    } finally {
+      setCompressing(false)
+    }
+  }
+
+  // ═══════ DELETE HANDLER ═══════
   const handleDelete = async (id: string, type: string) => {
     if (!confirm("Are you sure? All linked items will also be deleted.")) return
     try {
@@ -161,6 +199,7 @@ export default function AdminPanel() {
     }
   }
 
+  // ═══════ EDIT HANDLERS ═══════
   const handleEditCategory = (cat: any) => {
     setEditingId(cat._id)
     setCatTitle(cat.title)
@@ -192,23 +231,7 @@ export default function AdminPanel() {
     setShowForm("product")
   }
 
-  // Compress single image (for category/subcategory)
-  const handleSingleImage = async (file: File, setter: (f: File | null) => void) => {
-    setCompressing(true)
-    try {
-      const compressed = await compressImage(file, {
-        targetSizeKB: 400,
-        maxDimension: 1200,
-      })
-      setter(compressed)
-    } catch (err) {
-      console.error(err)
-      setter(file)
-    } finally {
-      setCompressing(false)
-    }
-  }
-
+  // ═══════ SAVE HANDLERS ═══════
   const handleSaveCategory = async () => {
     if (!catTitle) return alert("Title is required!")
     setSaving(true)
@@ -353,16 +376,28 @@ export default function AdminPanel() {
             </span>
           </div>
           <nav className="flex md:flex-col flex-row w-full md:pt-4">
-            <button onClick={() => setActiveTab("dashboard")} className={`flex items-center gap-3 px-6 py-3 text-sm font-medium whitespace-nowrap ${activeTab === "dashboard" ? "text-[#F5A623] bg-[#0A1929] border-r-4 border-[#F5A623]" : "text-gray-400 hover:text-white"}`}>
+            <button
+              onClick={() => setActiveTab("dashboard")}
+              className={`flex items-center gap-3 px-6 py-3 text-sm font-medium whitespace-nowrap ${activeTab === "dashboard" ? "text-[#F5A623] bg-[#0A1929] border-r-4 border-[#F5A623]" : "text-gray-400 hover:text-white"}`}
+            >
               <LayoutGrid size={18} /> Dashboard
             </button>
-            <button onClick={() => setActiveTab("categories")} className={`flex items-center gap-3 px-6 py-3 text-sm font-medium whitespace-nowrap ${activeTab === "categories" ? "text-[#F5A623] bg-[#0A1929] border-r-4 border-[#F5A623]" : "text-gray-400 hover:text-white"}`}>
+            <button
+              onClick={() => setActiveTab("categories")}
+              className={`flex items-center gap-3 px-6 py-3 text-sm font-medium whitespace-nowrap ${activeTab === "categories" ? "text-[#F5A623] bg-[#0A1929] border-r-4 border-[#F5A623]" : "text-gray-400 hover:text-white"}`}
+            >
               <Layers size={18} /> Categories
             </button>
-            <button onClick={() => setActiveTab("subcategories")} className={`flex items-center gap-3 px-6 py-3 text-sm font-medium whitespace-nowrap ${activeTab === "subcategories" ? "text-[#F5A623] bg-[#0A1929] border-r-4 border-[#F5A623]" : "text-gray-400 hover:text-white"}`}>
+            <button
+              onClick={() => setActiveTab("subcategories")}
+              className={`flex items-center gap-3 px-6 py-3 text-sm font-medium whitespace-nowrap ${activeTab === "subcategories" ? "text-[#F5A623] bg-[#0A1929] border-r-4 border-[#F5A623]" : "text-gray-400 hover:text-white"}`}
+            >
               <Package size={18} /> Sub Categories
             </button>
-            <button onClick={() => setActiveTab("products")} className={`flex items-center gap-3 px-6 py-3 text-sm font-medium whitespace-nowrap ${activeTab === "products" ? "text-[#F5A623] bg-[#0A1929] border-r-4 border-[#F5A623]" : "text-gray-400 hover:text-white"}`}>
+            <button
+              onClick={() => setActiveTab("products")}
+              className={`flex items-center gap-3 px-6 py-3 text-sm font-medium whitespace-nowrap ${activeTab === "products" ? "text-[#F5A623] bg-[#0A1929] border-r-4 border-[#F5A623]" : "text-gray-400 hover:text-white"}`}
+            >
               <PlusCircle size={18} /> Products
             </button>
             <Link href="/" className="mt-auto flex items-center gap-3 px-6 py-3 text-sm font-medium text-gray-500 hover:text-white">
@@ -373,6 +408,13 @@ export default function AdminPanel() {
 
         {/* Main Content */}
         <div className="flex-1 p-6 md:p-10 overflow-y-auto">
+          {errorMsg && (
+            <div className="bg-red-500/20 border border-red-500 text-red-300 p-4 rounded-xl mb-6">
+              <strong>Error:</strong> {errorMsg}
+              <button onClick={fetchData} className="ml-4 underline hover:text-red-200">Retry</button>
+            </div>
+          )}
+
           {activeTab === "dashboard" && (
             <div>
               <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
@@ -402,14 +444,18 @@ export default function AdminPanel() {
                 </button>
               </div>
               {loading ? (
-                <p className="text-gray-500">Loading...</p>
+                <div className="flex items-center gap-2 text-gray-500"><Loader2 size={16} className="animate-spin" /> Loading...</div>
+              ) : cats.length === 0 ? (
+                <div className="bg-[#13293D] border border-[#1E3A52] rounded-xl p-10 text-center text-gray-500">No categories found.</div>
               ) : (
                 <div className="space-y-3">
-                  {cats.length === 0 && <div className="bg-[#13293D] border border-[#1E3A52] rounded-xl p-10 text-center text-gray-500">No categories.</div>}
                   {cats.map((cat) => (
                     <div key={cat._id} className="bg-[#13293D] border border-[#1E3A52] rounded-xl p-4 flex items-center gap-4">
                       {cat.image ? <img src={cat.image} alt="" className="w-14 h-14 rounded-lg object-cover" /> : <div className="w-14 h-14 bg-[#0D1F30] rounded-lg flex items-center justify-center text-xl">Box</div>}
-                      <div className="flex-1"><h3 className="font-bold">{cat.title}</h3></div>
+                      <div className="flex-1">
+                        <h3 className="font-bold">{cat.title}</h3>
+                        {cat.tag && cat.tag !== "none" && <p className="text-xs text-gray-500">Tag: {cat.tag}</p>}
+                      </div>
                       <div className="flex gap-2">
                         <button onClick={() => handleEditCategory(cat)} className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 p-2 rounded-lg transition-colors"><Pencil size={16} /></button>
                         <button onClick={() => handleDelete(cat._id, "category")} className="text-red-500 hover:text-red-400 hover:bg-red-500/10 p-2 rounded-lg transition-colors"><Trash2 size={16} /></button>
@@ -430,14 +476,18 @@ export default function AdminPanel() {
                 </button>
               </div>
               {loading ? (
-                <p className="text-gray-500">Loading...</p>
+                <div className="flex items-center gap-2 text-gray-500"><Loader2 size={16} className="animate-spin" /> Loading...</div>
+              ) : subcats.length === 0 ? (
+                <div className="bg-[#13293D] border border-[#1E3A52] rounded-xl p-10 text-center text-gray-500">No sub categories found.</div>
               ) : (
                 <div className="space-y-3">
-                  {subcats.length === 0 && <div className="bg-[#13293D] border border-[#1E3A52] rounded-xl p-10 text-center text-gray-500">No sub categories.</div>}
                   {subcats.map((sub) => (
                     <div key={sub._id} className="bg-[#13293D] border border-[#1E3A52] rounded-xl p-4 flex items-center gap-4">
                       {sub.image ? <img src={sub.image} alt="" className="w-14 h-14 rounded-lg object-cover" /> : <div className="w-14 h-14 bg-[#0D1F30] rounded-lg flex items-center justify-center text-xl">Box</div>}
-                      <div className="flex-1"><h3 className="font-bold">{sub.title}</h3><p className="text-xs text-gray-500">Parent: {sub.parentTitle || "None"}</p></div>
+                      <div className="flex-1">
+                        <h3 className="font-bold">{sub.title}</h3>
+                        <p className="text-xs text-gray-500">Parent: {sub.parentTitle || "None"}</p>
+                      </div>
                       <div className="flex gap-2">
                         <button onClick={() => handleEditSubCategory(sub)} className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 p-2 rounded-lg transition-colors"><Pencil size={16} /></button>
                         <button onClick={() => handleDelete(sub._id, "subcategory")} className="text-red-500 hover:text-red-400 hover:bg-red-500/10 p-2 rounded-lg transition-colors"><Trash2 size={16} /></button>
@@ -458,14 +508,18 @@ export default function AdminPanel() {
                 </button>
               </div>
               {loading ? (
-                <p className="text-gray-500">Loading...</p>
+                <div className="flex items-center gap-2 text-gray-500"><Loader2 size={16} className="animate-spin" /> Loading...</div>
+              ) : prods.length === 0 ? (
+                <div className="bg-[#13293D] border border-[#1E3A52] rounded-xl p-10 text-center text-gray-500">No products found.</div>
               ) : (
                 <div className="space-y-3">
-                  {prods.length === 0 && <div className="bg-[#13293D] border border-[#1E3A52] rounded-xl p-10 text-center text-gray-500">No products.</div>}
                   {prods.map((p) => (
                     <div key={p._id} className="bg-[#13293D] border border-[#1E3A52] rounded-xl p-4 flex items-center gap-4">
                       {p.image ? <img src={p.image} alt="" className="w-14 h-14 rounded-lg object-cover" /> : <div className="w-14 h-14 bg-[#0D1F30] rounded-lg flex items-center justify-center text-xl">Car</div>}
-                      <div className="flex-1"><h3 className="font-bold">{p.title}</h3><p className="text-xs text-gray-500">Rs {p.price}</p></div>
+                      <div className="flex-1">
+                        <h3 className="font-bold">{p.title}</h3>
+                        <p className="text-xs text-gray-500">Rs {p.price} - {p.subCatTitle || "No category"}</p>
+                      </div>
                       <div className="flex items-center gap-2">
                         <button onClick={() => handleEditProduct(p)} className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 p-2 rounded-lg transition-colors"><Pencil size={16} /></button>
                         <button onClick={() => handleDelete(p._id, "product")} className="text-red-500 hover:text-red-400 hover:bg-red-500/10 p-2 rounded-lg transition-colors"><Trash2 size={16} /></button>
@@ -501,11 +555,7 @@ export default function AdminPanel() {
               <div>
                 <label className="text-xs text-gray-400 block mb-1">Image (auto-compressed to 400KB)</label>
                 <label className="flex items-center justify-center gap-2 w-full h-24 bg-[#13293D] border-2 border-dashed border-[#1E3A52] rounded-xl cursor-pointer hover:border-[#F5A623] text-gray-500 text-sm">
-                  {compressing ? (
-                    <><Loader2 size={16} className="animate-spin" /> Compressing...</>
-                  ) : (
-                    <><Upload size={16} /> {catImage ? catImage.name : "Upload"}</>
-                  )}
+                  {compressing ? <><Loader2 size={16} className="animate-spin" /> Compressing...</> : <><Upload size={16} /> {catImage ? catImage.name : "Upload"}</>}
                   <input
                     type="file"
                     accept="image/*"
@@ -518,6 +568,7 @@ export default function AdminPanel() {
                 </label>
               </div>
               <button onClick={handleSaveCategory} disabled={saving || compressing} className="w-full bg-[#F5A623] hover:bg-[#D4911E] text-[#0A1929] font-bold py-3 rounded-xl mt-4 flex items-center justify-center gap-2 disabled:opacity-50">
+                {saving ? <Loader2 size={16} className="animate-spin" /> : null}
                 {saving ? "Saving..." : editingId ? "Update Category" : "Save Category"}
               </button>
             </div>
@@ -546,11 +597,7 @@ export default function AdminPanel() {
               <div>
                 <label className="text-xs text-gray-400 block mb-1">Image (auto-compressed to 400KB)</label>
                 <label className="flex items-center justify-center gap-2 w-full h-24 bg-[#13293D] border-2 border-dashed border-[#1E3A52] rounded-xl cursor-pointer hover:border-[#F5A623] text-gray-500 text-sm">
-                  {compressing ? (
-                    <><Loader2 size={16} className="animate-spin" /> Compressing...</>
-                  ) : (
-                    <><Upload size={16} /> {subCatImage ? subCatImage.name : "Upload"}</>
-                  )}
+                  {compressing ? <><Loader2 size={16} className="animate-spin" /> Compressing...</> : <><Upload size={16} /> {subCatImage ? subCatImage.name : "Upload"}</>}
                   <input
                     type="file"
                     accept="image/*"
@@ -563,6 +610,7 @@ export default function AdminPanel() {
                 </label>
               </div>
               <button onClick={handleSaveSubCategory} disabled={saving || compressing} className="w-full bg-[#F5A623] hover:bg-[#D4911E] text-[#0A1929] font-bold py-3 rounded-xl mt-4 flex items-center justify-center gap-2 disabled:opacity-50">
+                {saving ? <Loader2 size={16} className="animate-spin" /> : null}
                 {saving ? "Saving..." : editingId ? "Update Sub Category" : "Save Sub Category"}
               </button>
             </div>
@@ -577,13 +625,11 @@ export default function AdminPanel() {
             <button onClick={() => { setShowForm(""); resetForms(); }} className="absolute top-4 right-4 text-gray-500 hover:text-white z-10"><X size={18} /></button>
             <h2 className="text-xl font-bold mb-6">{editingId ? "Edit Product" : "Add New Product"}</h2>
             <div className="space-y-4">
-              {/* Title */}
               <div>
                 <label className="text-xs text-gray-400 block mb-1">Product Title *</label>
                 <input value={prodTitle} onChange={(e) => setProdTitle(e.target.value)} placeholder="e.g Toyota Corolla Engine" className="w-full px-4 py-3 bg-[#13293D] border border-[#1E3A52] rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-[#F5A623]" />
               </div>
 
-              {/* Price & Condition */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">Price</label>
@@ -599,7 +645,6 @@ export default function AdminPanel() {
                 </div>
               </div>
 
-              {/* Sub Category */}
               <div>
                 <label className="text-xs text-gray-400 block mb-1">Sub Category *</label>
                 <select value={prodSubCat} onChange={(e) => setProdSubCat(e.target.value)} className="w-full px-4 py-3 bg-[#13293D] border border-[#1E3A52] rounded-xl text-gray-300 focus:outline-none focus:border-[#F5A623]">
@@ -608,19 +653,16 @@ export default function AdminPanel() {
                 </select>
               </div>
 
-              {/* Car Model */}
               <div>
                 <label className="text-xs text-gray-400 block mb-1">Car Model</label>
                 <input value={prodModel} onChange={(e) => setProdModel(e.target.value)} placeholder="e.g Corolla 2020, Civic Oriel" className="w-full px-4 py-3 bg-[#13293D] border border-[#1E3A52] rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-[#F5A623]" />
               </div>
 
-              {/* Description */}
               <div>
                 <label className="text-xs text-gray-400 block mb-1">Product Description</label>
                 <textarea value={prodDescription} onChange={(e) => setProdDescription(e.target.value)} rows={3} placeholder="Write details..." className="w-full px-4 py-3 bg-[#13293D] border border-[#1E3A52] rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-[#F5A623] resize-none" />
               </div>
 
-              {/* Toggles */}
               <div className="grid grid-cols-3 gap-2 bg-[#13293D] border border-[#1E3A52] rounded-xl p-3">
                 <label className="flex items-center justify-between text-xs cursor-pointer">
                   <span className="text-gray-300">In Stock</span>
@@ -641,8 +683,6 @@ export default function AdminPanel() {
                 <label className="text-xs text-gray-400 block mb-1.5">
                   Product Images * <span className="text-gray-600">({prodImages.length}/8) - auto-compressed to 400KB</span>
                 </label>
-
-                {/* Drop zone */}
                 <div
                   onDragEnter={handleDrag}
                   onDragOver={handleDrag}
@@ -650,11 +690,7 @@ export default function AdminPanel() {
                   onDrop={handleDrop}
                   onClick={() => !compressing && fileInputRef.current?.click()}
                   className={`flex flex-col items-center justify-center gap-2 w-full h-32 bg-[#13293D] border-2 border-dashed rounded-xl cursor-pointer transition-all ${
-                    compressing
-                      ? "border-[#F5A623] bg-[#F5A623]/5 cursor-wait"
-                      : dragActive
-                      ? "border-[#F5A623] bg-[#F5A623]/5"
-                      : "border-[#1E3A52] hover:border-[#F5A623]/50"
+                    compressing ? "border-[#F5A623] bg-[#F5A623]/5 cursor-wait" : dragActive ? "border-[#F5A623] bg-[#F5A623]/5" : "border-[#1E3A52] hover:border-[#F5A623]/50"
                   }`}
                 >
                   {compressing ? (
@@ -685,7 +721,6 @@ export default function AdminPanel() {
                   />
                 </div>
 
-                {/* Preview Grid */}
                 {prodImagePreviews.length > 0 && (
                   <div className="grid grid-cols-4 gap-2 mt-3">
                     {prodImagePreviews.map((src, i) => (
@@ -715,17 +750,14 @@ export default function AdminPanel() {
                 )}
               </div>
 
-              {/* Save Button */}
-              <button onClick={handleSaveProduct} disabled={saving || compressing} className="w-full bg-gradient-to-r from-[#F5A623] to-[#FFB94D] hover:from-[#FFB94D] hover:to-[#F5A623] text-[#0A1929] font-bold py-3 rounded-xl mt-4 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+              <button onClick={handleSaveProduct} disabled={saving || compressing} className="w-full bg-gradient-to-r from-[#F5A623] to-[#FFB94D] hover:from-[#FFB94D] hover:to-[#F5A623] text-[#0A1929] font-bold py-3 rounded-xl mt-4 flex items-center justify-center gap-2 disabled:opacity-50">
                 {saving ? (
                   <>
                     <div className="w-4 h-4 border-2 border-[#0A1929] border-t-transparent rounded-full animate-spin"></div>
                     Uploading {prodImages.length} images...
                   </>
                 ) : (
-                  <>
-                    <PlusCircle size={16} /> {editingId ? "Update Product" : "Save Product"}
-                  </>
+                  <><PlusCircle size={16} /> {editingId ? "Update Product" : "Save Product"}</>
                 )}
               </button>
             </div>

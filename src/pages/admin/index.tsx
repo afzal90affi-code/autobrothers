@@ -40,7 +40,11 @@ export default function AdminPanel() {
   const [prodTitle, setProdTitle] = useState("")
   const [prodPrice, setProdPrice] = useState("")
   const [prodCondition, setProdCondition] = useState("Good")
+  
+  // ✅ NEW: Product Category state added
+  const [prodCat, setProdCat] = useState("")
   const [prodSubCat, setProdSubCat] = useState("")
+  
   const [prodFeatured, setProdFeatured] = useState(false)
   const [prodNewArrival, setProdNewArrival] = useState(false)
   const [prodDescription, setProdDescription] = useState("")
@@ -50,6 +54,9 @@ export default function AdminPanel() {
   const [prodImagePreviews, setProdImagePreviews] = useState<string[]>([])
   const [dragActive, setDragActive] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // ✅ NEW: Filtered Subcategories for Product Form
+  const filteredProdSubCats = prodCat ? subcats.filter(s => s.parentId === prodCat) : []
 
   // ═══════ DATA FETCHING (via API route - NO CORS) ═══════
   const fetchData = async () => {
@@ -150,7 +157,11 @@ export default function AdminPanel() {
     setProdTitle("")
     setProdPrice("")
     setProdCondition("Good")
+    
+    // ✅ NEW: Reset product category
+    setProdCat("")
     setProdSubCat("")
+    
     setProdFeatured(false)
     setProdNewArrival(false)
     setProdDescription("")
@@ -221,7 +232,13 @@ export default function AdminPanel() {
     setProdTitle(p.title)
     setProdPrice(p.price)
     setProdCondition(p.condition || "Good")
-    setProdSubCat(p.subCatId || "")
+    
+    // ✅ FIX: Find parent category automatically when editing
+    const subId = p.subCatId || p.parentId
+    const sub = subcats.find(s => s._id === subId)
+    setProdCat(sub?.parentId || "")
+    
+    setProdSubCat(subId || "")
     setProdFeatured(p.featured)
     setProdNewArrival(p.newArrival)
     setProdDescription(p.description || "")
@@ -618,7 +635,7 @@ export default function AdminPanel() {
         </div>
       )}
 
-      {/* ═══════ PRODUCT MODAL (MULTI-IMAGE) ═══════ */}
+      {/* ═══════ PRODUCT MODAL (MULTI-IMAGE + FIXED CATEGORIES) ═══════ */}
       {showForm === "product" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4" onClick={() => { setShowForm(""); resetForms(); }}>
           <div className="w-full max-w-lg bg-[#0A1929] border border-[#1E3A52] rounded-2xl p-6 relative max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -645,11 +662,37 @@ export default function AdminPanel() {
                 </div>
               </div>
 
+              {/* ✅ NEW: Category Dropdown Added Here */}
               <div>
-                <label className="text-xs text-gray-400 block mb-1">Sub Category *</label>
-                <select value={prodSubCat} onChange={(e) => setProdSubCat(e.target.value)} className="w-full px-4 py-3 bg-[#13293D] border border-[#1E3A52] rounded-xl text-gray-300 focus:outline-none focus:border-[#F5A623]">
-                  <option value="">Select Sub Category...</option>
-                  {subcats.map((s) => <option key={s._id} value={s._id}>{s.title}</option>)}
+                <label className="text-xs text-gray-400 block mb-1">Select Category *</label>
+                <select 
+                  value={prodCat} 
+                  onChange={(e) => { setProdCat(e.target.value); setProdSubCat(""); }} 
+                  className="w-full px-4 py-3 bg-[#13293D] border border-[#1E3A52] rounded-xl text-gray-300 focus:outline-none focus:border-[#F5A623]"
+                >
+                  <option value="">-- Select Category First --</option>
+                  {cats.map((c) => <option key={c._id} value={c._id}>{c.title}</option>)}
+                </select>
+              </div>
+
+              {/* ✅ FIXED: Filtered Sub Category Dropdown */}
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">
+                  Sub Category * 
+                  {prodCat && filteredProdSubCats.length > 0 && (
+                    <span className="text-[#F5A623] ml-1">({filteredProdSubCats.length} found)</span>
+                  )}
+                </label>
+                <select 
+                  value={prodSubCat} 
+                  onChange={(e) => setProdSubCat(e.target.value)} 
+                  disabled={!prodCat}
+                  className={`w-full px-4 py-3 bg-[#13293D] border border-[#1E3A52] rounded-xl text-gray-300 focus:outline-none focus:border-[#F5A623] transition-all ${!prodCat ? "opacity-50 cursor-not-allowed" : ""}`}
+                >
+                  <option value="">
+                    {!prodCat ? "Pehle category select karo..." : filteredProdSubCats.length === 0 ? "Is category mein koi subcategory nahi" : "-- Select Sub Category --"}
+                  </option>
+                  {filteredProdSubCats.map((s) => <option key={s._id} value={s._id}>{s.title}</option>)}
                 </select>
               </div>
 

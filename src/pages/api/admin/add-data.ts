@@ -26,7 +26,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       title,
       slug,
       tag,
-    
       parentId,
       price,
       condition,
@@ -38,10 +37,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       imageData,
       fileName,
       imagesData,
+      seo, // ✅ NEW: SEO Object from Admin Panel
+      ogImageData, // ✅ NEW: OG Image Base64
+      ogImageName, // ✅ NEW: OG Image Name
     } = req.body
 
     let imageAsset = null
     let imageAssetsArray: any[] = []
+    let ogImageAsset = null // ✅ NEW: OG Image Asset variable
 
     // Single Image Upload
     if (imageData && fileName) {
@@ -49,6 +52,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const buffer = Buffer.from(base64Data, "base64")
       imageAsset = await serverClient.assets.upload("image", buffer, {
         filename: fileName,
+      })
+    }
+
+    // ✅ NEW: OG Image Upload (For Products)
+    if (ogImageData && ogImageName) {
+      const base64Data = ogImageData.replace(/^data:image\/\w+;base64,/, "")
+      const buffer = Buffer.from(base64Data, "base64")
+      ogImageAsset = await serverClient.assets.upload("image", buffer, {
+        filename: ogImageName,
       })
     }
 
@@ -69,6 +81,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
+    // ✅ NEW: Helper function to build SEO object for Sanity
+    const buildSeoObject = (seoData: any) => {
+      if (!seoData) return undefined
+      return {
+        _type: "seo", // Sanity mein "seo" name ka object type banwana padega
+        metaTitle: seoData.metaTitle || "",
+        metaDesc: seoData.metaDesc || "",
+        keywords: seoData.keywords || "",
+        canonical: seoData.canonical || "",
+        robots: seoData.robots || "index, follow",
+        // Product specific fields (agar nahi honge toh undefined rehenge)
+        ogTitle: seoData.ogTitle || "",
+        ogDesc: seoData.ogDesc || "",
+        ogImage: ogImageAsset
+          ? { _type: "image", asset: { _type: "reference", _ref: ogImageAsset._id } }
+          : undefined,
+        twitterCard: seoData.twitterCard || "summary_large_image",
+        enableSchema: seoData.enableSchema !== false, // default true
+      }
+    }
+
     let docToCreate: any = {}
 
     if (type === "category") {
@@ -80,6 +113,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         image: imageAsset
           ? { _type: "image", asset: { _type: "reference", _ref: imageAsset._id } }
           : undefined,
+        seo: buildSeoObject(seo), // ✅ NEW
       }
     } else if (type === "subcategory") {
       docToCreate = {
@@ -90,6 +124,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         image: imageAsset
           ? { _type: "image", asset: { _type: "reference", _ref: imageAsset._id } }
           : undefined,
+        seo: buildSeoObject(seo), // ✅ NEW
       }
     } else if (type === "product") {
       const finalImages =
@@ -112,6 +147,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         model: model || "",
         subcategory: { _type: "reference", _ref: parentId },
         images: finalImages,
+        seo: buildSeoObject(seo), // ✅ NEW
       }
     }
 

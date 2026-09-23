@@ -194,6 +194,7 @@ function Hero() {
               </span>
               <span className="bg-gradient-to-r from-[#F5A623] to-[#FF8A00] bg-clip-text text-transparent">
                 Brothers
+                
               </span>
             </p>
 

@@ -1,12 +1,78 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-body { background: #0A1929; color: #fff; }
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #0A1929; }
+
+/* ---------- Base: Light theme (default) ---------- */
+body {
+  background: #f8fafc;
+  color: #1e293b;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ---------- Dark theme ---------- */
+html.dark body {
+  background: #0A1929;
+  color: #ffffff;
+}
+
+/* ---------- Scrollbar ---------- */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
 ::-webkit-scrollbar-thumb { background: #F5A623; border-radius: 3px; }
-@keyframes pulseGlow { 0%, 100% { box-shadow: 0 0 0 0 rgba(37,211,102,0.5); } 50% { box-shadow: 0 0 0 12px rgba(37,211,102,0); } }
-@keyframes sweepLight { 0% { left: -100%; opacity: 0; } 15% { opacity: 1; } 100% { left: 200%; opacity: 0; } }
-@keyframes floatGear { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-20px) rotate(180deg); } }
+html.dark ::-webkit-scrollbar-track { background: #0A1929; }
+
+/* ---------- Quill Editor (dono themes ke liye) ---------- */
+.quill .ql-toolbar {
+  border-radius: 0.75rem 0.75rem 0 0;
+  border-color: #e2e8f0 !important;
+  background: #f8fafc;
+}
+.quill .ql-container {
+  border-radius: 0 0 0.75rem 0.75rem;
+  border-color: #e2e8f0 !important;
+  background: #ffffff;
+  font-family: inherit;
+  min-height: 160px;
+}
+html.dark .quill .ql-toolbar {
+  border-color: #23405E !important;
+  background: #1B3A5C;
+}
+html.dark .quill .ql-container {
+  border-color: #23405E !important;
+  background: #112240;
+  color: #ffffff;
+}
+html.dark .quill .ql-toolbar .ql-stroke { stroke: #cbd5e1; }
+html.dark .quill .ql-toolbar .ql-fill { fill: #cbd5e1; }
+html.dark .quill .ql-toolbar .ql-picker-label { color: #cbd5e1; }
+html.dark .quill .ql-editor.ql-blank::before { color: #64748b; }
+
+/* Quill output (blog detail page) styling */
+.quill-content h1, .quill-content h2, .quill-content h3 {
+  font-weight: 700;
+  margin: 0.8em 0 0.4em;
+}
+.quill-content p { margin: 0.6em 0; line-height: 1.7; }
+.quill-content ul, .quill-content ol { padding-left: 1.5em; margin: 0.6em 0; }
+.quill-content ul { list-style: disc; }
+.quill-content ol { list-style: decimal; }
+.quill-content img { max-width: 100%; border-radius: 0.75rem; margin: 1em 0; }
+.quill-content a { color: #F5A623; text-decoration: underline; }
+.quill-content blockquote {
+  border-left: 4px solid #F5A623;
+  padding-left: 1em;
+  margin: 1em 0;
+  font-style: italic;
+}
+
+/* ---------- Line clamp helper ---------- */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

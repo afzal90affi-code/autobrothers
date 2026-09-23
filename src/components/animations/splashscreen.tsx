@@ -1,4 +1,7 @@
+'use client';
+
 import { useState, useRef } from 'react';
+import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface SplashScreenProps {
@@ -11,11 +14,11 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
   const [showSplash, setShowSplash] = useState(true);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  // RPM Gauge Generator function (Pura wahi copy paste karein jo pehle tha)
-  const generateRPMGauge = () => {
-    const marks = [];
+  // RPM Gauge Generator
+  const generateRPMGauge = (): ReactNode[] => {
+    const marks: ReactNode[] = [];
     const cx = 150, cy = 150, r = 120;
-    
+
     for (let val = 0; val <= 8; val++) {
       const angle = -120 + (val * 30);
       const rad = (angle * Math.PI) / 180;
@@ -36,11 +39,11 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
       const isActive = i <= activeLights;
 
       marks.push(
-        <rect 
+        <rect
           key={`led${i}`}
           x="-7" y="-7" width="14" height="14" rx="2"
           transform={`translate(${lx}, ${ly}) rotate(${angle + 90})`}
-          fill={isActive ? (isRed ? "#FF3300" : "#00AAFF") : "#1a1a1a"} 
+          fill={isActive ? (isRed ? "#FF3300" : "#00AAFF") : "#1a1a1a"}
           style={{ filter: isActive ? `drop-shadow(0 0 8px ${isRed ? '#FF3300' : '#00AAFF'})` : 'none', transition: 'all 0.1s ease-out' }}
         />
       );
@@ -54,7 +57,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
       audioRef.current.play().catch(e => console.log("Audio blocked:", e));
     }
     setEngineStarted(true);
-    
+
     let step = 1;
     const revUp = setInterval(() => {
       setActiveLights(step);
@@ -70,11 +73,11 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
               clearInterval(revDown);
               setTimeout(() => {
                 setShowSplash(false);
-                onFinish(); // Parent ko signal dena
+                onFinish();
               }, 500);
             }
           }, 100);
-        }, 800); 
+        }, 800);
       }
     }, 150);
   }
@@ -82,14 +85,14 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
   return (
     <AnimatePresence>
       {showSplash && (
-        <motion.div 
+        <motion.div
           key="splash"
           exit={{ opacity: 0, scale: 1.1 }}
           transition={{ duration: 0.6, ease: 'easeInOut' }}
           className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center overflow-hidden"
         >
           <audio ref={audioRef} src="/car-start.mp3" preload="auto" />
-          
+
           <div className="relative z-10 w-72 h-72 md:w-96 md:h-96">
             <svg viewBox="0 0 300 300" className="w-full h-full drop-shadow-2xl">
               <circle cx="150" cy="150" r="145" fill="#080808" stroke="#222" strokeWidth="6" />
@@ -104,7 +107,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
           </div>
 
           {!engineStarted ? (
-            <motion.button 
+            <motion.button
               onClick={handleEngineStart}
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}

@@ -10,6 +10,7 @@ const ACTIONS = [
   { label: "Write Blog", href: "/admin/blog", icon: "✍️", desc: "Quill editor se post" },
   { label: "Add Car", href: "/admin/new-cars", icon: "🚗", desc: "New car + finance" },
   { label: "Categories", href: "/admin/categories", icon: "📂", desc: "Manage categories" },
+  { label: "Sub Categories", href: "/admin/subcategories", icon: "🗂️", desc: "Manage sub-categories" },
 ];
 
 type Counts = { products: number; blogs: number; cars: number; banks: number; cats: number; subs: number };
@@ -58,7 +59,7 @@ export default function AdminDashboard() {
     { label: "New Cars", value: counts.cars, href: "/admin/new-cars", icon: "🚗" },
     { label: "Finance Banks", value: counts.banks, href: "/admin/new-cars", icon: "🏦" },
     { label: "Categories", value: counts.cats, href: "/admin/categories", icon: "📂" },
-    { label: "Sub-Categories", value: counts.subs, href: "/admin/categories", icon: "🗂️" },
+    { label: "Sub-Categories", value: counts.subs, href: "/admin/subcategories", icon: "🗂️" },
   ];
 
   const fmtDate = (d: string) =>
@@ -79,8 +80,8 @@ export default function AdminDashboard() {
           </p>
         </div>
 
-        {/* ---------- Quick Actions ---------- */}
-        <div className="mb-8 grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* ---------- Quick Actions (5 cards) ---------- */}
+        <div className="mb-8 grid grid-cols-2 lg:grid-cols-5 gap-3">
           {ACTIONS.map((a) => (
             <Link key={a.label} href={a.href}
               className="group rounded-2xl bg-gradient-to-br from-[#F5A623] to-[#FFB94D] p-[1.5px] transition hover:shadow-lg hover:shadow-amber-500/20">

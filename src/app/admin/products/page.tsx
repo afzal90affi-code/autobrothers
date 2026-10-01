@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { writeClient } from "../../../lib/sanityadmin";
-import AddProductForm from "../../../components/ProductForm";
+import AddProductForm from "../../../components/admin/ProductForm";
 import { Plus, Trash2, Search, ExternalLink, RefreshCw } from "lucide-react";
 
 type P = {

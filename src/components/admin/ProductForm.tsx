@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react"
-import { adminCreate, adminUploadImage } from "../lib/adminApi"
+import { adminCreate, adminUploadImage } from "../../lib/adminApi"
+import { client } from "../../lib/sanityClient"
 import { X, Upload, Trash2, Plus } from "lucide-react"
 
 export default function AddProductForm({ onClose }: { onClose: () => void }) {
@@ -25,40 +26,38 @@ export default function AddProductForm({ onClose }: { onClose: () => void }) {
   const [categories, setCategories] = useState<any[]>([])
   const [subcats, setSubcats] = useState<any[]>([])
 
-  // Fetch categories + subcategories (read — client se theek hai)
+  /* ✅ Categories + Subcategories — direct Sanity client se
+     (categories page jaisi hi queries, same field names) */
   useEffect(() => {
+    let cancelled = false
     const fetchData = async () => {
       setLoading(true)
       try {
-        const cats = await fetch("/api/get-data?type=categories").then(r => r.json()).catch(() => null)
-        // Agar get-data API nahi hai toh direct read client use karo:
-        let catsData = cats?.success ? cats.data : null
-        let subsData: any[] = []
-
-        if (!catsData) {
-          // Fallback: read client (agar available hai) ya phir empty
-          catsData = []
-        }
-
-        try {
-          const subsRes = await fetch("/api/get-data?type=subcategories").then(r => r.json())
-          subsData = subsRes?.success ? subsRes.data : []
-        } catch { subsData = [] }
-
+        const [catsData, subsData] = await Promise.all([
+          client.fetch<any[]>(
+            `*[_type == "category"] | order(coalesce(order, 9999) asc, title asc){ _id, title }`
+          ),
+          client.fetch<any[]>(
+            `*[_type == "subcategory"] | order(title asc){ _id, title, "parentId": parentCategory->_id }`
+          ),
+        ])
+        if (cancelled) return
         setCategories(catsData || [])
-        setSubcats(subsData)
+        setSubcats(subsData || [])
       } catch (error) {
         console.error("Fetch error:", error)
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
     fetchData()
+    return () => { cancelled = true }
   }, [])
 
-  // Filtered subcategories
+  /* ✅ Selected category ki subcategories
+     (categories page bhi "parentId" hi return karta hai — parentCategory->_id) */
   const filteredSubcats = catId
-    ? subcats.filter((sub) => sub.parentCatId === catId || sub.parentId === catId)
+    ? subcats.filter((sub) => sub.parentId === catId)
     : []
 
   const handleCatChange = (id: string) => {
@@ -122,7 +121,7 @@ export default function AddProductForm({ onClose }: { onClose: () => void }) {
     setSaving(true)
 
     try {
-      // ✅ Images API route se upload karo (server pe token hai)
+      // ✅ Images upload (server-side token adminApi se)
       const assetIds: string[] = []
       for (const file of imageFiles) {
         const assetId = await adminUploadImage(file)
@@ -134,7 +133,7 @@ export default function AddProductForm({ onClose }: { onClose: () => void }) {
         asset: { _type: "reference", _ref: id },
       }))
 
-      // ✅ Product API route se save karo
+      // ✅ Product save
       await adminCreate({
         _type: "product",
         title: title,
@@ -156,6 +155,7 @@ export default function AddProductForm({ onClose }: { onClose: () => void }) {
         inStock: inStock,
         description: description || undefined,
         model: model || undefined,
+        // ✅ Subcategory reference (product schema ka field name "subcategory")
         subcategory: { _type: "reference", _ref: subcatId },
         images: imagesArray,
         publishedAt: date,
@@ -282,7 +282,7 @@ export default function AddProductForm({ onClose }: { onClose: () => void }) {
               </select>
               {categories.length === 0 && (
                 <p className="text-[10px] text-rose-400 mt-1.5 pl-1">
-                  Koi category nahi mili. Pehle categories banao.
+                  Koi category nahi mili. Pehle Categories page se banao.
                 </p>
               )}
             </div>
@@ -331,8 +331,8 @@ export default function AddProductForm({ onClose }: { onClose: () => void }) {
               </select>
               {catId && filteredSubcats.length === 0 && (
                 <p className="text-[10px] text-amber-400/80 mt-1.5 pl-1">
-                  Is category ke under koi subcategory nahi hai. Pehle
-                  subcategories add karo.
+                  Is category ke under koi subcategory nahi hai. Categories
+                  page se add karo.
                 </p>
               )}
             </div>

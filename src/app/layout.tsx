@@ -27,8 +27,8 @@ try {
 }
 `;
 
-/* ✅ GA4 — .env.local: NEXT_PUBLIC_GA_MEASUREMENT_ID */
-const GA_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+/* ✅ GA4 — TEMP: hardcoded for testing (env variable baad me wapas lagayenge) */
+const GA_ID = "G-P07XWJD49Z";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

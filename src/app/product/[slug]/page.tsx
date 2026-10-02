@@ -9,6 +9,7 @@ export const revalidate = 60;
 
 const BASE_URL = "https://autobrothers.pk";
 const SITE_NAME = "AutoBrothers";
+const WHAPSAPP_NUMBER_UNUSED = ""; // (placeholder hataya — neeche asli variable hai)
 const WHATSAPP_NUMBER = "923222806245"; // APNA NUMBER (92 + number, + nahi)
 
 // Price string → number ("25,000" → 25000, "Contact for Price" → null)
@@ -78,7 +79,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
       _id, title, "slug": slug.current, price, condition, inStock, featured, newArrival,
       description, model, "subRef": subcategory._ref,
       "subTitle": subcategory->title, "subSlug": subcategory->slug.current,
-      "images": images[]{ "url": asset->url, "alt": coalesce(alt, ^title) }
+      "images": images[]{ "url": asset->url, "alt": coalesce(alt, ^.title) }
     }`,
     { slug: params.slug }
   );

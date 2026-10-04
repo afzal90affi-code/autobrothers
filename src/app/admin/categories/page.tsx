@@ -19,7 +19,7 @@ const slugify = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 90);
 
 /* ============================================================
-   Image picker (reusable)
+   Image picker (reusable — naya image select karne ke liye)
    ============================================================ */
 function ImagePicker({
   preview,
@@ -59,6 +59,74 @@ function ImagePicker({
 }
 
 /* ============================================================
+   Existing image row — Replace YA Delete dono options ke saath
+   ============================================================ */
+function ExistingImageActions({
+  imgUrl,
+  alt,
+  newPreview,
+  onReplace,
+  onClearNew,
+  onDeleteFlag,
+  setDeleteFlag,
+  busy,
+}: {
+  imgUrl: string;
+  alt: string;
+  newPreview: string;
+  onReplace: (f: File) => void;
+  onClearNew: () => void;
+  onDeleteFlag: boolean;
+  setDeleteFlag: (v: boolean) => void;
+  busy: boolean;
+}) {
+  if (newPreview) {
+    return (
+      <div className="w-fit">
+        <img src={newPreview} alt="New preview" className="h-14 w-20 rounded-lg object-cover ring-1 ring-[#F5A623]/50" />
+        <button type="button" onClick={onClearNew}
+          className="absolute -mt-16 ml-[70px] flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">✕</button>
+        <p className="mt-1 text-[9px] text-gray-500">Nayi image — Save pe upload hogi</p>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <img src={`${imgUrl}?w=120&h=80&fit=crop`} alt={alt}
+        className="h-14 w-20 rounded-lg object-cover ring-1 ring-[#1E3A52]" />
+      <div className="flex flex-col gap-1.5">
+        <label className="flex w-fit cursor-pointer items-center gap-1.5 rounded-lg border border-dashed border-[#1E3A52] px-3 py-1.5 text-[11px] text-gray-400 transition hover:border-[#F5A623]/50 hover:text-[#F5A623]">
+          <ImagePlus size={12} /> Replace Image
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onReplace(f);
+              e.target.value = "";
+            }}
+          />
+        </label>
+        <button
+          type="button"
+          onClick={() => setDeleteFlag(!onDeleteFlag)}
+          disabled={busy}
+          className={`flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold transition ${
+            onDeleteFlag
+              ? "bg-red-500/20 text-red-400"
+              : "text-red-400/70 hover:bg-red-500/10 hover:text-red-400"
+          }`}
+        >
+          <Trash2 size={12} />
+          {onDeleteFlag ? "Image delete hogi (Save dabao)" : "Delete Image"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
    Category + SubCategory Manager (Add + Edit + Delete + Image)
    ============================================================ */
 function CategoryManager({
@@ -66,11 +134,15 @@ function CategoryManager({
   catType,
   subType,
   subParentField,
+  refType,   // kaunsa document type reference karta hai (product / blog)
+  refField,  // us document me reference field ka naam (subcategory / blogSubcategory)
 }: {
   label: string;
   catType: string;
   subType: string;
   subParentField: string;
+  refType: string;
+  refField: string;
 }) {
   const [cats, setCats] = useState<Cat[]>([]);
   const [subs, setSubs] = useState<SubCat[]>([]);
@@ -83,22 +155,25 @@ function CategoryManager({
   const [openId, setOpenId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  /* ---------- EDIT states ---------- */
+  /* ---------- EDIT states (category) ---------- */
   const [editCatId, setEditCatId] = useState<string | null>(null);
   const [editCatTitle, setEditCatTitle] = useState("");
   const [editCatImage, setEditCatImage] = useState<File | null>(null);
   const [editCatImagePreview, setEditCatImagePreview] = useState("");
+  const [editCatRemoveImg, setEditCatRemoveImg] = useState(false); // ✅ image delete flag
 
+  /* ---------- EDIT states (subcategory) ---------- */
   const [editSubId, setEditSubId] = useState<string | null>(null);
   const [editSubTitle, setEditSubTitle] = useState("");
   const [editSubImage, setEditSubImage] = useState<File | null>(null);
   const [editSubImagePreview, setEditSubImagePreview] = useState("");
+  const [editSubRemoveImg, setEditSubRemoveImg] = useState(false); // ✅ image delete flag
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
       const c = await client.fetch<Cat[]>(
-        `*[_type == "${catType}"] | order(coalesce(order, 9999) asc, title asc){ _id, title, "slug": slug.current, "img": image.asset->url, "_count": count(*[_type == "product" && references(^._id)]) }`
+        `*[_type == "${catType}"] | order(coalesce(order, 9999) asc, title asc){ _id, title, "slug": slug.current, "img": image.asset->url, "_count": count(*[_type == "${refType}" && references(^._id)]) }`
       ).catch(() => []);
       const s = await client.fetch<SubCat[]>(
         `*[_type == "${subType}"] | order(title asc){ _id, title, "parentId": ${subParentField}->_id, "img": image.asset->url }`
@@ -108,7 +183,7 @@ function CategoryManager({
     } finally {
       setLoading(false);
     }
-  }, [catType, subType, subParentField]);
+  }, [catType, subType, subParentField, refType]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -178,7 +253,8 @@ function CategoryManager({
     setEditCatId(c._id);
     setEditCatTitle(c.title);
     setEditCatImage(null);
-    setEditCatImagePreview(""); // purani image rehti hai jab tak nayi select na ho
+    setEditCatImagePreview("");
+    setEditCatRemoveImg(false);
   };
 
   const cancelEditCat = () => {
@@ -186,6 +262,7 @@ function CategoryManager({
     setEditCatTitle("");
     setEditCatImage(null);
     setEditCatImagePreview("");
+    setEditCatRemoveImg(false);
   };
 
   const saveEditCat = async () => {
@@ -198,8 +275,14 @@ function CategoryManager({
       if (editCatImage) {
         const assetId = await adminUploadImage(editCatImage);
         patch.image = { _type: "image", asset: { _type: "reference", _ref: assetId } };
+        await adminUpdate(editCatId, patch);
+      } else if (editCatRemoveImg) {
+        // ✅ Baaki fields update + image unset
+        await adminUpdate(editCatId, patch);
+        await client.patch(editCatId).unset(["image"]).commit();
+      } else {
+        await adminUpdate(editCatId, patch);
       }
-      await adminUpdate(editCatId, patch);
       cancelEditCat();
       await refresh();
     } catch (e: any) {
@@ -214,6 +297,7 @@ function CategoryManager({
     setEditSubTitle(s.title);
     setEditSubImage(null);
     setEditSubImagePreview("");
+    setEditSubRemoveImg(false);
   };
 
   const cancelEditSub = () => {
@@ -221,6 +305,7 @@ function CategoryManager({
     setEditSubTitle("");
     setEditSubImage(null);
     setEditSubImagePreview("");
+    setEditSubRemoveImg(false);
   };
 
   const saveEditSub = async () => {
@@ -233,8 +318,14 @@ function CategoryManager({
       if (editSubImage) {
         const assetId = await adminUploadImage(editSubImage);
         patch.image = { _type: "image", asset: { _type: "reference", _ref: assetId } };
+        await adminUpdate(editSubId, patch);
+      } else if (editSubRemoveImg) {
+        // ✅ Baaki fields update + image unset
+        await adminUpdate(editSubId, patch);
+        await client.patch(editSubId).unset(["image"]).commit();
+      } else {
+        await adminUpdate(editSubId, patch);
       }
-      await adminUpdate(editSubId, patch);
       cancelEditSub();
       await refresh();
     } catch (e: any) {
@@ -243,16 +334,31 @@ function CategoryManager({
     setBusy(false);
   };
 
-  /* ---------- DELETE ---------- */
-  const removeCat = async (c: Cat) => {
-    if (!confirm(`"${c.title}" delete karein? Iske sub-categories bhi delete hongi (products safe rahenge).`)) return;
+  /* ---------- DELETE SUB (reference-safe) ---------- */
+  const removeSub = async (s: SubCat) => {
     setBusy(true);
     try {
-      const childIds = subs.filter((s) => s.parentId === c._id).map((s) => s._id);
-      for (const id of childIds) {
-        await adminDelete(id).catch(() => {});
+      const usingDocs: { _id: string; title?: string }[] = await client
+        .fetch(`*[_type == $refType && references($id)]{ _id, title }`, { refType, id: s._id })
+        .catch(() => []);
+
+      if (usingDocs.length > 0) {
+        const sample = usingDocs.slice(0, 3).map((d) => `"${d.title || d._id}"`).join(", ");
+        const more = usingDocs.length > 3 ? ` +${usingDocs.length - 3} more` : "";
+        const force = confirm(
+          `⚠️ "${s.title}" ${usingDocs.length} ${refType}(s) me use ho rahi hai:\n\n${sample}${more}\n\n` +
+            `OK = Delete + un documents ka link safely hat jayega (documents delete NAHI honge)\n` +
+            `Cancel = pehle manually reassign karo`
+        );
+        if (!force) { setBusy(false); return; }
+        for (const d of usingDocs) {
+          await client.patch(d._id).unset([refField]).commit().catch(() => {});
+        }
+      } else {
+        if (!confirm(`"${s.title}" delete karein?`)) { setBusy(false); return; }
       }
-      await adminDelete(c._id);
+
+      await adminDelete(s._id);
       await refresh();
     } catch (e: any) {
       alert(e?.message || "Delete failed");
@@ -260,11 +366,51 @@ function CategoryManager({
     setBusy(false);
   };
 
-  const removeSub = async (s: SubCat) => {
-    if (!confirm(`"${s.title}" delete karein?`)) return;
+  /* ---------- DELETE CATEGORY (reference-safe, subs ke saath) ---------- */
+  const removeCat = async (c: Cat) => {
     setBusy(true);
     try {
-      await adminDelete(s._id);
+      const childSubs = subs.filter((s) => s.parentId === c._id);
+
+      // Kitne documents directly category ko reference kar rahe hain
+      const directUsing: { _id: string; title?: string }[] = await client
+        .fetch(`*[_type == $refType && references($id)]{ _id, title }`, { refType, id: c._id })
+        .catch(() => []);
+
+      // Kitne documents child subs ko reference kar rahe hain
+      let subUsingCount = 0;
+      for (const s of childSubs) {
+        const n = await client
+          .fetch<number>(`count(*[_type == $refType && references($id)])`, { refType, id: s._id })
+          .catch(() => 0);
+        subUsingCount += n || 0;
+      }
+
+      const totalUsing = directUsing.length + subUsingCount;
+
+      let msg = `"${c.title}" delete karein? Iske ${childSubs.length} sub-categories bhi delete hongi.`;
+      if (totalUsing > 0) {
+        msg += `\n\n⚠️ ${totalUsing} ${refType}(s) in categories/sub-categories ko use kar rahe hain.\nOK = unka link safely hat jayega (${refType}s delete NAHI honge)\nCancel = pehle manually reassign karo`;
+      }
+      if (!confirm(msg)) { setBusy(false); return; }
+
+      // Direct category references unset karo
+      for (const d of directUsing) {
+        await client.patch(d._id).unset([refField]).commit().catch(() => {});
+      }
+
+      // Har child sub: pehle uske references unset, phir delete
+      for (const s of childSubs) {
+        const using: { _id: string }[] = await client
+          .fetch(`*[_type == $refType && references($id)]{ _id }`, { refType, id: s._id })
+          .catch(() => []);
+        for (const d of using) {
+          await client.patch(d._id).unset([refField]).commit().catch(() => {});
+        }
+        await adminDelete(s._id).catch(() => {});
+      }
+
+      await adminDelete(c._id);
       await refresh();
     } catch (e: any) {
       alert(e?.message || "Delete failed");
@@ -338,12 +484,26 @@ function CategoryManager({
                         <X size={18} />
                       </button>
                     </div>
-                    <ImagePicker
-                      preview={editCatImagePreview || c.img || ""}
-                      onSelect={(f) => { setEditCatImage(f); setEditCatImagePreview(URL.createObjectURL(f)); }}
-                      onRemove={() => { setEditCatImage(null); setEditCatImagePreview(""); }}
-                      label="Change Image (optional)"
-                    />
+                    {/* ✅ CATEGORY IMAGE — Replace ya Delete */}
+                    {c.img || editCatImage ? (
+                      <ExistingImageActions
+                        imgUrl={c.img || ""}
+                        alt={c.title}
+                        newPreview={editCatImagePreview}
+                        onReplace={(f) => { setEditCatImage(f); setEditCatImagePreview(URL.createObjectURL(f)); setEditCatRemoveImg(false); }}
+                        onClearNew={() => { setEditCatImage(null); setEditCatImagePreview(""); }}
+                        onDeleteFlag={editCatRemoveImg}
+                        setDeleteFlag={setEditCatRemoveImg}
+                        busy={busy}
+                      />
+                    ) : (
+                      <ImagePicker
+                        preview=""
+                        onSelect={(f) => { setEditCatImage(f); setEditCatImagePreview(URL.createObjectURL(f)); }}
+                        onRemove={() => { setEditCatImage(null); setEditCatImagePreview(""); }}
+                        label="Add Image (optional)"
+                      />
+                    )}
                     <p className="text-[10px] text-gray-500">Sirf badli hui cheezein update hongi — image select nahi ki toh purani rahegi.</p>
                   </div>
                 ) : (
@@ -363,6 +523,11 @@ function CategoryManager({
                       <span className="shrink-0 rounded-full bg-[#13293D] px-2 py-0.5 text-[10px] text-gray-400">
                         {mySubs.length} sub
                       </span>
+                      {(c._count ?? 0) > 0 && (
+                        <span className="shrink-0 rounded-full bg-[#F5A623]/15 px-2 py-0.5 text-[10px] font-bold text-[#F5A623]">
+                          {c._count} {refType}s
+                        </span>
+                      )}
                     </button>
                     <button onClick={() => startEditCat(c)}
                       className="p-2 text-gray-500 transition hover:text-blue-400" title="Edit">
@@ -398,12 +563,26 @@ function CategoryManager({
                               <X size={14} />
                             </button>
                           </div>
-                          <ImagePicker
-                            preview={editSubImagePreview || s.img || ""}
-                            onSelect={(f) => { setEditSubImage(f); setEditSubImagePreview(URL.createObjectURL(f)); }}
-                            onRemove={() => { setEditSubImage(null); setEditSubImagePreview(""); }}
-                            label="Change Image (optional)"
-                          />
+                          {/* ✅ SUB IMAGE — Replace ya Delete */}
+                          {s.img || editSubImage ? (
+                            <ExistingImageActions
+                              imgUrl={s.img || ""}
+                              alt={s.title}
+                              newPreview={editSubImagePreview}
+                              onReplace={(f) => { setEditSubImage(f); setEditSubImagePreview(URL.createObjectURL(f)); setEditSubRemoveImg(false); }}
+                              onClearNew={() => { setEditSubImage(null); setEditSubImagePreview(""); }}
+                              onDeleteFlag={editSubRemoveImg}
+                              setDeleteFlag={setEditSubRemoveImg}
+                              busy={busy}
+                            />
+                          ) : (
+                            <ImagePicker
+                              preview=""
+                              onSelect={(f) => { setEditSubImage(f); setEditSubImagePreview(URL.createObjectURL(f)); }}
+                              onRemove={() => { setEditSubImage(null); setEditSubImagePreview(""); }}
+                              label="Add Image (optional)"
+                            />
+                          )}
                         </div>
                       ) : (
                         /* ---------- SUB NORMAL ROW ---------- */
@@ -468,7 +647,7 @@ function CategoryManager({
 }
 
 /* ============================================================
-   Car Brands (edit ke saath)
+   Car Brands (edit ke saath + reference-safe delete)
    ============================================================ */
 function BrandManager() {
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -526,10 +705,25 @@ function BrandManager() {
     setBusy(false);
   };
 
+  /* ✅ Reference-safe delete — kaunsi cars is brand ko use kar rahi hain */
   const removeBrand = async (b: Brand) => {
-    if (!confirm(`"${b.title}" brand delete karein?`)) return;
     setBusy(true);
     try {
+      const usingDocs: { _id: string; _type: string; title?: string }[] = await client
+        .fetch(`*[references($id) && _type != "carBrand"]{ _id, _type, title }`, { id: b._id })
+        .catch(() => []);
+
+      if (usingDocs.length > 0) {
+        const types = Array.from(new Set(usingDocs.map((d) => d._type))).join(", ");
+        alert(
+          `⚠️ "${b.title}" brand ${usingDocs.length} document(s) me use ho raha hai (${types}).\n\n` +
+            `Pehle un documents se ye brand hatao, phir delete hoga.`
+        );
+        setBusy(false);
+        return;
+      }
+
+      if (!confirm(`"${b.title}" brand delete karein?`)) { setBusy(false); return; }
       await adminDelete(b._id);
       await refresh();
     } catch (e: any) {
@@ -646,6 +840,8 @@ export default function AdminCategoriesPage() {
               catType="category"
               subType="subcategory"
               subParentField="parentCategory"
+              refType="product"
+              refField="subcategory"
             />
           )}
           {tab === "blog" && (
@@ -655,6 +851,8 @@ export default function AdminCategoriesPage() {
               catType="blogCategory"
               subType="blogSubcategory"
               subParentField="parentCategory"
+              refType="blog"
+              refField="blogSubcategory" // ⚠️ apne blog schema ke hisaab se adjust karo
             />
           )}
           {tab === "cars" && <BrandManager key={`c-${refreshKey}`} />}

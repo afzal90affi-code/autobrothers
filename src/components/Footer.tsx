@@ -7,6 +7,9 @@ import { client } from "../lib/sanityClient";
 const WHATSAPP_NUMBER = "923222806245";
 const LOGO_URL = "/logo.png"; // ⚠️ logo public/ folder mein dalo — CDN link permanent nahi hota
 
+const FB_URL = "https://www.facebook.com/profile.php?id=100064020401353";
+const IG_URL = "https://instagram.com/autobrothers.pk";
+
 const SHOP_LINKS = [
   { l: "All Products", h: "/products" },
   { l: "New Cars", h: "/new-cars" },
@@ -58,11 +61,9 @@ export default function Footer() {
           <div className="mt-4 flex gap-2">
             <a href={`https://wa.me/${WHATSAPP_NUMBER}`} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp"
               className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1E3A52] hover:bg-green-500 transition text-sm">📱</a>
-            <a href={`tel:+${WHATSAPP_NUMBER}`} aria-label="Phone"
-              className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1E3A52] hover:bg-[#F5A623] transition text-sm">📞</a>
-            <a href="#" aria-label="Facebook"
+            <a href={FB_URL} target="_blank" rel="noopener noreferrer" aria-label="Facebook"
               className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1E3A52] hover:bg-blue-500 transition text-sm">📘</a>
-            <a href="#" aria-label="Instagram"
+            <a href={IG_URL} target="_blank" rel="noopener noreferrer" aria-label="Instagram"
               className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1E3A52] hover:bg-pink-500 transition text-sm">📸</a>
           </div>
         </div>
@@ -109,26 +110,22 @@ export default function Footer() {
         </div>
       </div>
 
-      {/* ---------- CONTACT STRIP ---------- */}
+      {/* ---------- CONTACT STRIP (call number hata diya) ---------- */}
       <div className="border-t border-[#1E3A52]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-          <p>📞 <a href={`tel:+${WHATSAPP_NUMBER}`} className="hover:text-[#F5A623] font-semibold text-gray-300">0322-2806245</a></p>
+          <p>💬 <a href={`https://wa.me/${WHATSAPP_NUMBER}`} target="_blank" rel="noopener noreferrer" className="hover:text-[#F5A623] font-semibold text-gray-300">WhatsApp Orders</a></p>
           <p>📍 Karachi, Pakistan — 🕘 Mon–Sat, 9am–8pm</p>
           <p>💳 Cash on Delivery • Bank Transfer</p>
         </div>
       </div>
 
-      {/* ---------- BOTTOM BAR ---------- */}
+      {/* ---------- BOTTOM BAR (Admin link hata diya) ---------- */}
       <div className="border-t border-[#1E3A52] bg-[#0D1F30]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-2">
           <p className="text-[11px] text-gray-600">
             © {new Date().getFullYear()} AutoBrothers.pk — All rights reserved.
           </p>
-          <div className="flex items-center gap-4">
-            {/* AdSense disclosure — recommended */}
-            <span className="text-[10px] text-gray-600">This site uses cookies & serves ads via Google AdSense</span>
-            <Link href="/admin" className="text-[11px] text-gray-600 hover:text-[#F5A623] transition-colors">Admin</Link>
-          </div>
+          <span className="text-[10px] text-gray-600">This site uses cookies & serves ads via Google AdSense</span>
         </div>
       </div>
     </footer>

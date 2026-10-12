@@ -4,12 +4,19 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { writeClient } from "../../../lib/sanityadmin";
 import AddProductForm from "../../../components/admin/ProductForm";
-import { Plus, Trash2, Search, ExternalLink, RefreshCw } from "lucide-react";
+import { Plus, Trash2, Search, ExternalLink, RefreshCw, Pencil } from "lucide-react";
 
 type P = {
   _id: string; title: string; slug: string; price?: string;
   condition?: string; inStock?: boolean; featured?: boolean; newArrival?: boolean;
   image?: string; catTitle?: string; subTitle?: string; _createdAt: string;
+  /* ✅ EDIT ke liye poora data */
+  oldPrice?: string; conditionScore?: number; mileage?: string; warranty?: number;
+  qualityChecked?: boolean; japanImported?: boolean; brand?: string;
+  partNumber?: string; engineCode?: string; seoTitle?: string; seoDesc?: string;
+  description?: string; model?: string;
+  catId?: string; subcatId?: string;
+  imagesRaw?: { url: string; _key: string }[];
 };
 
 const condBadge = (c?: string) => {
@@ -24,16 +31,24 @@ export default function AdminProductsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  const [editing, setEditing] = useState<P | null>(null);
 
+  /* ✅ Query ab EDIT ke liye poora data fetch karti hai */
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
       const d = await writeClient.fetch<P[]>(
         `*[_type == "product" && defined(slug.current)] | order(_createdAt desc){
-          _id, title, "slug": slug.current, price, condition, inStock, featured, newArrival,
+          _id, title, "slug": slug.current, price, oldPrice, condition, conditionScore,
+          mileage, warranty, qualityChecked, japanImported,
+          brand, partNumber, engineCode, seoTitle, seoDesc,
+          description, model, inStock, featured, newArrival,
           "image": images[0].asset->url,
           "catTitle": subcategory->parentCategory->title,
           "subTitle": subcategory->title,
+          "catId": subcategory->parentCategory->_id,
+          "subcatId": subcategory->_id,
+          "imagesRaw": images[]{ "url": asset->url, "_key": _key },
           _createdAt
         }`
       );
@@ -56,11 +71,25 @@ export default function AdminProductsPage() {
     }
   };
 
+  /* ✅ EDIT — form kholo, poora product data pass karo */
+  const startEdit = (p: P) => {
+    setEditing(p);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const closeForm = () => {
+    setAddOpen(false);
+    setEditing(null);
+    refresh();
+  };
+
   const filtered = prods.filter(
     (p) =>
       !search ||
       p.title.toLowerCase().includes(search.toLowerCase()) ||
-        (p.subTitle || "").toLowerCase().includes(search.toLowerCase())
+      (p.subTitle || "").toLowerCase().includes(search.toLowerCase()) ||
+      (p.brand || "").toLowerCase().includes(search.toLowerCase()) ||
+      (p.partNumber || "").toLowerCase().includes(search.toLowerCase())
   );
 
   const fmtDate = (d: string) =>
@@ -74,14 +103,14 @@ export default function AdminProductsPage() {
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[#F5A623]">Admin Panel</p>
             <h1 className="mt-1 text-2xl font-extrabold text-white md:text-3xl">Products 🛒</h1>
-            <p className="mt-1 text-xs text-gray-500">{prods.length} products — list, add aur delete yahan se</p>
+            <p className="mt-1 text-xs text-gray-500">{prods.length} products — list, add, edit aur delete yahan se</p>
           </div>
           <div className="flex gap-2">
             <button onClick={refresh} title="Refresh"
               className="rounded-xl border border-[#1E3A52] p-2.5 text-gray-400 hover:border-[#F5A623] hover:text-[#F5A623] transition">
               <RefreshCw size={16} />
             </button>
-            <button onClick={() => setAddOpen(true)}
+            <button onClick={() => { setEditing(null); setAddOpen(true); }}
               className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#F5A623] to-[#FFB94D] px-4 py-2.5 text-sm font-bold text-[#0A1929] shadow-lg shadow-amber-500/20">
               <Plus size={16} /> Add Product
             </button>
@@ -92,7 +121,7 @@ export default function AdminProductsPage() {
         <div className="relative mb-5">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search products..."
+            placeholder="Search by title, brand ya part number..."
             className="w-full rounded-xl border border-[#1E3A52] bg-[#13293D] py-3 pl-10 pr-4 text-sm text-white placeholder-gray-600 outline-none focus:border-[#F5A623]" />
         </div>
 
@@ -136,6 +165,8 @@ export default function AdminProductsPage() {
                     {!p.inStock && <span className="rounded-md bg-red-500/20 px-1.5 py-0.5 text-[9px] font-bold text-red-400">OUT</span>}
                     {p.subTitle && <span className="text-[10px] text-gray-500">{p.catTitle} › {p.subTitle}</span>}
                   </div>
+                  {/* ✅ Part number bhi dikhao (agar hai) */}
+                  {p.partNumber && <p className="text-[10px] font-mono text-gray-500 mt-0.5">🔧 {p.partNumber}</p>}
                   <p className="text-[10px] text-gray-600">{fmtDate(p._createdAt)}</p>
                 </div>
 
@@ -144,6 +175,11 @@ export default function AdminProductsPage() {
                     className="rounded-lg border border-[#1E3A52] p-2 text-gray-400 hover:text-[#F5A623] hover:border-[#F5A623]/50 transition">
                     <ExternalLink size={14} />
                   </Link>
+                  {/* ✅ EDIT BUTTON */}
+                  <button onClick={() => startEdit(p)} title="Edit product"
+                    className="rounded-lg border border-blue-900/50 p-2 text-blue-400 hover:bg-blue-500/10 transition">
+                    <Pencil size={14} />
+                  </button>
                   <button onClick={() => remove(p)} title="Delete"
                     className="rounded-lg border border-red-900/50 p-2 text-red-400 hover:bg-red-500/10 transition">
                     <Trash2 size={14} />
@@ -155,8 +191,14 @@ export default function AdminProductsPage() {
         )}
       </div>
 
-      {/* Add drawer (existing form) */}
-      {addOpen && <AddProductForm onClose={() => { setAddOpen(false); refresh(); }} />}
+      {/* Add/Edit drawer — editing pass + key for fresh prefill */}
+      {(addOpen || editing) && (
+        <AddProductForm
+          key={editing?._id ?? "new"}
+          editing={editing}
+          onClose={closeForm}
+        />
+      )}
     </div>
   );
 }

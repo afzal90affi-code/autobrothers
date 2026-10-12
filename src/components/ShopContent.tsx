@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
-/* ---------- Types ---------- */
+/* ---------- Types — ✅ used-product fields added ---------- */
 type Prod = {
   id: string;
   title: string;
@@ -12,13 +12,20 @@ type Prod = {
   image?: string;
   category?: string;
   catSlug?: string;
+  subCategory?: string;
   condition?: string;
+  conditionScore?: number;
+  mileage?: string;
+  warranty?: number;
+  qualityChecked?: boolean;
+  japanImported?: boolean;
+  model?: string;
   featured?: boolean;
   newArrival?: boolean;
   inStock?: boolean;
   description?: string;
 };
-type Cat = { id: string; name: string; slug: string; image?: string };
+type Cat = { id: string; name: string; slug: string; image?: string; productCount?: number };
 
 type Props = {
   prods: Prod[];
@@ -27,10 +34,11 @@ type Props = {
   initialQ?: string;
 };
 
-/* ---------- Social links ---------- */
+/* ---------- Constants ---------- */
 const FB_URL = "https://www.facebook.com/profile.php?id=100064020401353";
 const IG_URL = "https://instagram.com/autobrothers.pk";
 const IG_PROFILE_IMG = "https://i.ibb.co/84814xg5/b16b-5542697ff3a9c-1296x.webp";
+const WHATSAPP_NUMBER = "923222806245"; // ✅ apna number — Order button isse jayega
 
 const conditionStyle: Record<string, string> = {
   Good: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400",
@@ -38,18 +46,37 @@ const conditionStyle: Record<string, string> = {
   Bad: "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400",
 };
 
-/* ================= PRODUCT CARD ================= */
+/* ================= PRODUCT CARD — ✅ enhanced with used-product data ================= */
 function ProductCard({ p }: { p: Prod }) {
   const oldPrice = p.oldPrice ? Number(p.oldPrice) : 0;
   const newPrice = Number(p.price || 0);
   const discount = oldPrice > newPrice ? Math.round(((oldPrice - newPrice) / oldPrice) * 100) : 0;
 
+  /* ✅ Score badge */
+  const score = typeof p.conditionScore === "number" && p.conditionScore > 0 ? p.conditionScore : 0;
+  const scoreColor =
+    score >= 8 ? "bg-green-500" : score >= 6 ? "bg-amber-500" : "bg-red-500";
+
+  /* ✅ SEO alt — Google Images ke liye */
+  const imgAlt = `${p.title}${p.condition ? ` — ${p.condition} condition${score ? ` ${score}/10` : ""}` : ""} used auto part${p.model ? `, fits ${p.model}` : ""} — AutoBrothers Pakistan`;
+
   return (
-    <div className="group flex h-full flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-100 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg dark:bg-[#112240] dark:ring-[#1E3A52] dark:hover:shadow-black/40">
+    <div
+      className="group flex h-full flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-100 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg dark:bg-[#112240] dark:ring-[#1E3A52] dark:hover:shadow-black/40"
+      itemScope
+      itemType="https://schema.org/Product"
+    >
       <div className="relative overflow-hidden">
         {p.image ? (
-          <img src={p.image} alt={p.title} loading="lazy"
-            className="h-36 w-full object-cover transition-transform duration-500 group-hover:scale-105 sm:h-44" />
+          <img
+            src={p.image}
+            alt={imgAlt}
+            loading="lazy"
+            width={800}
+            height={800}
+            itemProp="image"
+            className="h-36 w-full object-cover transition-transform duration-500 group-hover:scale-105 sm:h-44"
+          />
         ) : (
           <div className="flex h-36 w-full items-center justify-center bg-gray-50 dark:bg-[#0D1F30] sm:h-44">
             <svg className="h-10 w-10 text-gray-300 dark:text-[#1E3A52]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -59,7 +86,13 @@ function ProductCard({ p }: { p: Prod }) {
           </div>
         )}
 
-        <div className="absolute left-2 top-2 flex flex-col gap-1">
+        {/* ✅ SCORE + CONDITION + NEW badges */}
+        <div className="absolute left-2 top-2 flex flex-col gap-1 items-start">
+          {score > 0 && (
+            <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-black text-white shadow-md ${scoreColor}`}>
+              {score}/10
+            </span>
+          )}
           {p.condition && (
             <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${conditionStyle[p.condition] ?? ""}`}>
               {p.condition}
@@ -86,21 +119,56 @@ function ProductCard({ p }: { p: Prod }) {
       </div>
 
       <div className="flex flex-1 flex-col gap-1 p-3">
-        <p className="truncate text-sm font-bold text-slate-900 dark:text-white">{p.title}</p>
-        <div className="flex items-baseline gap-2">
+        <p className="truncate text-sm font-bold text-slate-900 dark:text-white" itemProp="name">{p.title}</p>
+
+        {/* ✅ Fits model */}
+        {p.model && (
+          <p className="truncate text-[10px] text-gray-500 dark:text-gray-400">🚗 Fits: {p.model}</p>
+        )}
+
+        <div className="flex items-baseline gap-2" itemProp="offers" itemScope itemType="https://schema.org/Offer">
+          <meta itemProp="priceCurrency" content="PKR" />
+          <meta itemProp="price" content={String(newPrice)} />
           <p className="text-sm font-black text-[#F5A623]">Rs {newPrice.toLocaleString("en-PK")}</p>
           {discount > 0 && (
             <p className="text-[11px] text-gray-400 line-through">Rs {oldPrice.toLocaleString("en-PK")}</p>
           )}
         </div>
+
+        {/* ✅ Used-product trust chips */}
+        {(p.mileage || p.warranty || p.qualityChecked || p.japanImported) && (
+          <div className="flex flex-wrap gap-1">
+            {p.mileage && (
+              <span className="rounded-md bg-gray-100 px-1.5 py-0.5 text-[9px] font-semibold text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                🛣 {p.mileage} km
+              </span>
+            )}
+            {p.warranty && (
+              <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                🛡 {p.warranty}d
+              </span>
+            )}
+            {p.qualityChecked && (
+              <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-[9px] font-semibold text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+                ✅ Tested
+              </span>
+            )}
+            {p.japanImported && (
+              <span className="rounded-md bg-purple-50 px-1.5 py-0.5 text-[9px] font-semibold text-purple-600 dark:bg-purple-500/10 dark:text-purple-400">
+                🇯🇵 Japan
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="mt-auto flex items-center justify-between pt-1">
           {p.category && (
-            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-[#F5A623]/15 dark:text-[#F5A623]">
+            <span className="truncate rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-[#F5A623]/15 dark:text-[#F5A623]">
               {p.category}
             </span>
           )}
           {p.inStock !== false && (
-            <a href={`https://wa.me/?text=${encodeURIComponent(`Hi! I want to order: ${p.title} — Rs ${p.price}`)}`}
+            <a href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`Hi! I want to order: ${p.title} — Rs ${p.price}`)}`}
               target="_blank" rel="noopener noreferrer"
               className="rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600">
               Order
@@ -138,7 +206,7 @@ function SectionHead({ tag, title, showArrows, onPrev, onNext }: {
   );
 }
 
-/* ================= SOCIAL PAGES ================= */
+/* ================= SOCIAL PAGES (unchanged) ================= */
 function SocialPages() {
   return (
     <section className="border-t border-gray-200 py-12 dark:border-[#1E3A52] md:py-16">
@@ -210,7 +278,7 @@ function SocialPages() {
                 style={{ backgroundImage: `url(${IG_PROFILE_IMG})`, backgroundSize: "cover", backgroundPosition: "center" }} />
               <div className="relative z-10 w-full">
                 <div className="mx-auto mb-4 h-24 w-24 rounded-full border-4 border-pink-500 p-1 shadow-lg shadow-pink-500/20">
-                  <img src={IG_PROFILE_IMG} alt="IG Profile" className="h-full w-full rounded-full object-cover" />
+                  <img src={IG_PROFILE_IMG} alt="AutoBrothers Instagram Profile" className="h-full w-full rounded-full object-cover" />
                 </div>
                 <h3 className="text-lg font-bold text-white">AutoBrothers.Pk</h3>
                 <p className="mb-4 mt-1 text-xs text-gray-400">Japan Imported Auto Parts</p>
@@ -241,7 +309,6 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
 
   const activeCat = cats.find((c) => c.slug === active);
 
-  /* Admin flags se sections — flag ON products nahi toh fallback latest */
   const featured = useMemo(() => {
     const f = prods.filter((p) => p.featured);
     return (f.length ? f : prods).slice(0, 10);
@@ -252,7 +319,6 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
     return (n.length ? n : prods).slice(0, 10);
   }, [prods]);
 
-  /* Filtered grid */
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return prods.filter((p) => {
@@ -268,11 +334,10 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0A1929]">
 
-      {/* ===== 1. ADMIN CATEGORIES — sticky text navbar with | separators ===== */}
+      {/* ===== 1. CATEGORY NAVBAR — ✅ productCount chips ke saath ===== */}
       <div className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 backdrop-blur dark:border-[#1E3A52] dark:bg-[#0A1929]/95">
         <div className="mx-auto flex max-w-6xl items-center overflow-x-auto px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
 
-          {/* All Parts */}
           <button
             onClick={() => setActive("")}
             className={`relative shrink-0 px-1 py-2 text-sm font-semibold tracking-wide transition-colors duration-300 ${
@@ -289,7 +354,6 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
 
           {cats.map((c) => (
             <span key={c.slug} className="flex items-center">
-              {/* | separator */}
               <span className="mx-3 h-4 w-px shrink-0 bg-gray-300 dark:bg-[#1E3A52]" aria-hidden="true" />
               <button
                 onClick={() => setActive(c.slug)}
@@ -300,6 +364,12 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
                 }`}
               >
                 {c.name}
+                {/* ✅ Product count chip */}
+                {typeof c.productCount === "number" && c.productCount > 0 && (
+                  <span className="ml-1 rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-bold text-gray-500 dark:bg-[#1E3A52] dark:text-gray-400">
+                    {c.productCount}
+                  </span>
+                )}
                 <span className={`absolute inset-x-0 -bottom-0.5 h-[2px] origin-left rounded-full bg-gradient-to-r from-[#F5A623] to-[#FFB94D] transition-transform duration-300 ${
                   active === c.slug ? "scale-x-100" : "scale-x-0"
                 }`} />
@@ -312,7 +382,7 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
       {/* ===== 2. HERO BANNER ===== */}
       <section className="relative overflow-hidden">
         {activeCat?.image && (
-          <img src={activeCat.image} alt={activeCat.name}
+          <img src={activeCat.image} alt={`${activeCat.name} used auto parts — AutoBrothers Pakistan`}
             className="absolute inset-0 h-full w-full object-cover" />
         )}
         <div className={`absolute inset-0 ${
@@ -326,10 +396,17 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
             Auto Parts Shop
           </span>
           <h1 className="mt-3 text-3xl font-black leading-tight text-slate-900 sm:text-5xl dark:text-white">
-            SHOP <span className="text-[#F5A623]">{(activeCat?.name || "ALL PARTS").toUpperCase()}</span>
+            {/* ✅ SEO: H1 me category + "Used" keyword */}
+            {activeCat?.name ? (
+              <>USED <span className="text-[#F5A623]">{activeCat.name.toUpperCase()}</span></>
+            ) : (
+              <>SHOP <span className="text-[#F5A623]">USED AUTO PARTS</span></>
+            )}
           </h1>
           <p className="mt-3 max-w-md text-sm text-gray-600 sm:text-base dark:text-gray-300">
-            Engines, gearboxes, alternators — Japan imported, tested &amp; warranted. Order on WhatsApp.
+            {activeCat?.name
+              ? `Quality checked used ${activeCat.name.toLowerCase()} — Japan imported, tested & warranted. All Pakistan delivery.`
+              : "Engines, gearboxes, alternators — Japan imported, tested & warranted. Order on WhatsApp."}
           </p>
 
           <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -349,6 +426,7 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search parts... e.g. corolla engine"
+                aria-label="Search products"
                 className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-4 text-sm text-slate-900 shadow-sm outline-none placeholder:text-gray-400 focus:border-[#F5A623] sm:w-72 dark:border-[#1E3A52] dark:bg-[#13293D] dark:text-white"
               />
             </div>
@@ -356,7 +434,7 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
         </div>
       </section>
 
-      {/* ===== 3. NEW ARRIVALS (admin flag) ===== */}
+      {/* ===== 3. NEW ARRIVALS ===== */}
       {newArrivals.length > 0 && (
         <section className="mx-auto max-w-6xl px-4 py-8">
           <SectionHead tag="Latest" title="New Arrivals" showArrows
@@ -372,7 +450,7 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
         </section>
       )}
 
-      {/* ===== 4. FEATURED PRODUCTS (admin flag) — slider ===== */}
+      {/* ===== 4. FEATURED SLIDER ===== */}
       {featured.length > 0 && (
         <section className="bg-white py-8 dark:bg-[#0D1F30]/60">
           <div className="mx-auto max-w-6xl px-4">
@@ -423,7 +501,7 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
         )}
       </section>
 
-      {/* ===== 6. SOCIAL PAGES (FB + Instagram) ===== */}
+      {/* ===== 6. SOCIAL PAGES ===== */}
       <SocialPages />
     </div>
   );

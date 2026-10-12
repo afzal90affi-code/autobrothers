@@ -7,15 +7,19 @@ import SplashScreen from "./animations/splashscreen";
 import VehicleSelector from "./VehicleSelector";
 import { Car, ChevronRight } from "lucide-react";
 
-type Post = { _id: string; title: string; slug: string; image?: string; date: string; excerpt?: string };
+type Post = { _id: string; title: string; slug: string; image?: string; date: string; desc?: string; excerpt?: string };
 type Prod = {
   _id: string; title: string; slug: string; price: string;
-  image?: string; condition?: string; model?: string;
-  category?: string; subCat?: string; newArrival?: boolean;
+  oldPrice?: string; image?: string; condition?: string; conditionScore?: number;
+  mileage?: string; warranty?: number; qualityChecked?: boolean; japanImported?: boolean;
+  model?: string; category?: string; subCat?: string; newArrival?: boolean;
 };
 type Cat = { _id: string; title: string; slug: string; img?: string };
 
 /* ---------- helpers ---------- */
+
+const WHATSAPP_NUMBER = "92322806245".replace("806245", "806245"); // 923222806245
+const WA_NUMBER = "923222806245"; // ✅ apna number
 
 const fmtDate = (d: string) =>
   d ? new Date(d).toLocaleDateString("en-PK", { day: "numeric", month: "short", year: "numeric" }) : "";
@@ -26,9 +30,12 @@ const conditionStyle: Record<string, string> = {
   Bad: "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400",
 };
 
-/* ============================================================
-   NOTE: ThemeToggle Navbar wala single toggle use hota hai
-============================================================ */
+/* ✅ Condition → Score (ProductCard jaisa hi) */
+const scoreMap: Record<string, number> = { Good: 8, Average: 6, Bad: 3 };
+const getScore = (p: any): number =>
+  typeof p?.conditionScore === "number" && p.conditionScore > 0
+    ? p.conditionScore
+    : (scoreMap[p?.condition] ?? 0);
 
 function SectionHead({ emoji, title, sub, href }: { emoji?: string; title: string; sub?: string; href?: string }) {
   return (
@@ -67,18 +74,34 @@ function Skeleton({ n = 4, h = "h-52" }: { n?: number; h?: string }) {
 }
 
 /* ============================================================
-   INSTAGRAM STYLE PRODUCT CARD
+   ✅ HYDRATION-SAFE PRODUCT CARD
+   - img hamesha render hota hai (conditional <div> swap nahi)
+   - wa.me me number
+   - Score badge + used trust chips
 ============================================================ */
 
 function ProductCard({ p }: { p: Prod }) {
+  const score = getScore(p);
+  const scoreColor =
+    score >= 8 ? "bg-green-500" : score >= 6 ? "bg-amber-500" : "bg-red-500";
+
+  const imgAlt = `${p.title}${p.condition ? ` — ${p.condition} condition ${score}/10` : ""} used auto part${p.model ? `, fits ${p.model}` : ""} — AutoBrothers Pakistan`;
+
   return (
     <div className="group relative aspect-square overflow-hidden rounded-2xl bg-gray-100 shadow-sm ring-1 ring-gray-200/70 transition-all duration-500 hover:-translate-y-1 hover:shadow-2xl dark:bg-[#112240] dark:ring-white/[0.06]">
 
-      {p.image ? (
-        <img src={p.image} alt={p.title} loading="lazy"
-          className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105" />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-[#0D1F30] dark:to-[#13293D]">
+      {/* ✅ img HAMESHA render — hydration safe (src khali toh invisible) */}
+      <img
+        src={p.image ?? ""}
+        alt={imgAlt}
+        loading="lazy"
+        width={800}
+        height={800}
+        className={`h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105 ${p.image ? "" : "hidden"}`}
+      />
+      {/* Placeholder — img na ho toh (dono sides pe same condition) */}
+      {!p.image && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-[#0D1F30] dark:to-[#13293D]">
           <svg className="h-12 w-12 text-gray-300 dark:text-[#1E3A52]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M20 7.5v9a1.5 1.5 0 01-.75 1.3l-6.5 3.75a1.5 1.5 0 01-1.5 0L4.75 17.8A1.5 1.5 0 014 16.5v-9a1.5 1.5 0 01.75-1.3l6.5-3.75a1.5 1.5 0 011.5 0l6.5 3.75A1.5 1.5 0 0120 7.5z" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 7.5L12 12l7.5-4.5M12 21v-9" />
@@ -90,9 +113,9 @@ function ProductCard({ p }: { p: Prod }) {
       <div className="absolute inset-0 flex flex-col justify-between bg-gradient-to-t from-black/90 via-black/50 to-black/40 opacity-0 backdrop-blur-[2px] transition-all duration-400 group-hover:opacity-100">
 
         <div className="flex items-start justify-between p-3">
-          {p.condition && (
-            <span className={`rounded-lg px-2.5 py-1 text-[9px] font-black uppercase tracking-widest backdrop-blur-md ${conditionStyle[p.condition] ?? ""}`}>
-              {p.condition}
+          {score > 0 && (
+            <span className={`rounded-lg px-2 py-1 text-[9px] font-black text-white backdrop-blur-md ${scoreColor}`}>
+              {score}/10
             </span>
           )}
           {p.newArrival && (
@@ -113,6 +136,24 @@ function ProductCard({ p }: { p: Prod }) {
             {p.title}
           </p>
 
+          {/* ✅ Used trust chips */}
+          {(p.mileage || p.warranty || p.qualityChecked || p.japanImported) && (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {p.mileage && (
+                <span className="rounded bg-white/15 px-1.5 py-0.5 text-[8px] font-bold text-white">🛣 {p.mileage}km</span>
+              )}
+              {p.warranty && (
+                <span className="rounded bg-white/15 px-1.5 py-0.5 text-[8px] font-bold text-white">🛡 {p.warranty}d</span>
+              )}
+              {p.qualityChecked && (
+                <span className="rounded bg-white/15 px-1.5 py-0.5 text-[8px] font-bold text-white">✅ Tested</span>
+              )}
+              {p.japanImported && (
+                <span className="rounded bg-white/15 px-1.5 py-0.5 text-[8px] font-bold text-white">🇯🇵 Japan</span>
+              )}
+            </div>
+          )}
+
           <div className="mt-2 flex items-center justify-between gap-2">
             <div>
               <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-gray-400">Price</p>
@@ -126,9 +167,10 @@ function ProductCard({ p }: { p: Prod }) {
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                window.open(`https://wa.me/?text=${encodeURIComponent(`Hi! I'm interested in: ${p.title} — Rs ${p.price}`)}`, "_blank");
+                /* ✅ NUMBER added — ab seedha tumhari chat khulegi */
+                window.open(`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(`Hi! I'm interested in: ${p.title} — Rs ${p.price}`)}`, "_blank");
               }}
-              aria-label="Order on WhatsApp"
+              aria-label={`Order ${p.title} on WhatsApp`}
               className="flex h-10 items-center gap-1.5 rounded-xl bg-[#F5A623] px-4 text-[11px] font-black text-[#0A1929] shadow-lg shadow-[#F5A623]/30 transition-transform duration-300 hover:scale-105 active:scale-95">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
@@ -149,6 +191,7 @@ function ProductCard({ p }: { p: Prod }) {
     </div>
   );
 }
+
 /* ============================================================
    1. HERO
 ============================================================ */
@@ -165,21 +208,15 @@ function Hero() {
   return (
     <section className="relative">
       <div className="relative h-[420px] overflow-hidden sm:h-[520px] md:h-[600px]">
-        {/* ✅ Apni image: public/hero.jpg — na ho toh fallback */}
-        {s?.heroImage ? (
-            <img src="/hero"  alt="Hero" className="h-full w-full object-cover" />
-        ) : (
-          <img
-            src="/hero.webp"
-            alt="Car engine"
-            className="h-full w-full object-cover"
-            onError={(e) => {
-              // hero.jpg nahi mili toh unsplash fallback
-              (e.target as HTMLImageElement).src =
-                "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=1600&q=80";
-            }}
-          />
-        )}
+        <img
+          src="/hero.webp"
+          alt="AutoBrothers — used car engines and auto parts Pakistan"
+          className="h-full w-full object-cover"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src =
+              "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=1600&q=80";
+          }}
+        />
 
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/20" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-transparent to-transparent" />
@@ -187,14 +224,12 @@ function Hero() {
         <div className="absolute inset-0 flex items-end">
           <div className="mx-auto w-full max-w-6xl px-4 pb-12 sm:pb-16 md:pb-20">
 
-            {/* ===== STYLISH BRAND NAME ===== */}
             <p className="mb-3 select-none text-3xl font-black italic tracking-tight drop-shadow-lg sm:text-4xl md:text-5xl">
               <span className="bg-gradient-to-r from-white via-[#FFD9A0] to-[#F5A623] bg-clip-text text-transparent">
                 Auto
               </span>
               <span className="bg-gradient-to-r from-[#F5A623] to-[#FF8A00] bg-clip-text text-transparent">
                 Brothers
-                
               </span>
             </p>
 
@@ -205,7 +240,6 @@ function Hero() {
               Pakistan's Trusted Auto Store
             </span>
 
-            {/* ===== HEADING — Cars, Engines, EV/Hybrid, Buying Guides ===== */}
             <h1 className="mt-4 max-w-3xl text-2xl font-black leading-[1.1] text-white drop-shadow-lg sm:text-4xl md:text-5xl">
               {s?.heroTitle || (
                 <>
@@ -231,7 +265,6 @@ function Hero() {
                 </svg>
                 Shop Now
               </a>
-              {/* ✅ New Cars hata — Read Blog */}
               <Link href="/blog"
                 className="inline-flex items-center gap-2 rounded-xl border-2 border-white/40 bg-white/10 px-7 py-3.5 text-sm font-bold text-white backdrop-blur transition-all hover:scale-105 hover:bg-white/20 sm:text-base">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -268,9 +301,8 @@ function Hero() {
   );
 }
 
-
 /* ============================================================
-   2. NEWS (latest 4 blogs)
+   2. NEWS
 ============================================================ */
 
 function NewsSection() {
@@ -294,21 +326,21 @@ function NewsSection() {
           {posts.map((p) => (
             <Link key={p._id} href={`/blog/${p.slug}`}>
               <div className="group h-full overflow-hidden rounded-2xl bg-white shadow-md shadow-gray-200/60 ring-1 ring-gray-100 transition-all duration-500 hover:-translate-y-1.5 hover:shadow-xl dark:bg-[#112240] dark:shadow-black/20 dark:ring-[#1E3A52] dark:hover:shadow-black/40">
-                {p.image ? (
-                  <div className="overflow-hidden">
-                    <img src={`${p.image}?w=600&auto=format&q=70`} alt={p.title} loading="lazy" className="h-32 w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                  </div>
-                ) : (
-                  <div className="flex h-32 w-full items-center justify-center bg-gray-50 dark:bg-[#0D1F30]">
-                    <svg className="h-8 w-8 text-gray-300 dark:text-[#1E3A52]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 5v14a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2zm-11 4h8m-8 4h8m-8 4h5" />
-                    </svg>
-                  </div>
-                )}
+                <div className="overflow-hidden">
+                  {/* ✅ img hamesha — hydration safe */}
+                  <img
+                    src={p.image ? `${p.image}?w=600&auto=format&q=70` : ""}
+                    alt={`${p.title} — AutoBrothers car care blog`}
+                    loading="lazy"
+                    width={600}
+                    height={300}
+                    className={`h-32 w-full object-cover transition-transform duration-500 group-hover:scale-105 ${p.image ? "" : "hidden"}`}
+                  />
+                </div>
                 <div className="space-y-1 p-3.5">
                   <p className="text-[10px] font-bold uppercase tracking-wide text-[#F5A623]">{fmtDate(p.date)}</p>
                   <h3 className="line-clamp-2 text-sm font-bold text-slate-900 group-hover:text-[#F5A623] dark:text-white">{p.title}</h3>
-                  {p.excerpt && <p className="line-clamp-2 text-xs text-gray-500 dark:text-gray-400">{p.excerpt}</p>}
+                  {p.desc && <p className="line-clamp-2 text-xs text-gray-500 dark:text-gray-400">{p.desc}</p>}
                 </div>
               </div>
             </Link>
@@ -320,6 +352,18 @@ function NewsSection() {
 }
 
 /* ============================================================
+   ✅ PRODUCT FIELDS — used-product data ke saath (shared)
+============================================================ */
+
+const PRODUCT_FIELDS = `
+  _id, title, "slug": slug.current, price, oldPrice, condition, conditionScore,
+  mileage, warranty, qualityChecked, japanImported, model, newArrival,
+  "image": images[0].asset->url,
+  "subCat": subcategory->title,
+  "category": subcategory->parentCategory->title
+`;
+
+/* ============================================================
    3. NEW ARRIVALS
 ============================================================ */
 
@@ -328,21 +372,11 @@ function NewArrivals() {
 
   useEffect(() => {
     client.fetch<Prod[]>(
-      `*[_type == "product" && newArrival == true] | order(_createdAt desc) [0...8] {
-        _id, title, "slug": slug.current, price, condition, model,
-        "image": images[0].asset->url,
-        "subCat": subcategory->title,
-        "category": subcategory->parentCategory->title
-      }`
+      `*[_type == "product" && newArrival == true] | order(_createdAt desc) [0...8] { ${PRODUCT_FIELDS} }`
     ).then((d) => {
       if (d?.length) { setProds(d); return; }
       return client.fetch<Prod[]>(
-        `*[_type == "product"] | order(_createdAt desc) [0...8] {
-          _id, title, "slug": slug.current, price, condition, model,
-          "image": images[0].asset->url,
-          "subCat": subcategory->title,
-          "category": subcategory->parentCategory->title
-        }`
+        `*[_type == "product"] | order(_createdAt desc) [0...8] { ${PRODUCT_FIELDS} }`
       ).then(setProds);
     }).catch(() => {});
   }, []);
@@ -366,7 +400,7 @@ function NewArrivals() {
 }
 
 /* ============================================================
-   4. CATEGORIES (premium cards with images)
+   4. CATEGORIES
 ============================================================ */
 
 function CategoriesSection() {
@@ -397,7 +431,7 @@ function CategoriesSection() {
             className="group relative aspect-[4/3] overflow-hidden rounded-2xl shadow-md ring-1 ring-gray-200 transition-all duration-500 hover:-translate-y-1.5 hover:shadow-2xl hover:ring-[#F5A623]/50 dark:ring-[#1E3A52]">
 
             {c.img ? (
-              <img src={`${c.img}?w=600&auto=format&q=70`} alt={c.title} loading="lazy"
+              <img src={`${c.img}?w=600&auto=format&q=70`} alt={`Used ${c.title} auto parts — AutoBrothers Pakistan`} loading="lazy"
                 className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" />
             ) : (
               <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#13293D] to-[#0A1929]">
@@ -428,7 +462,7 @@ function CategoriesSection() {
 }
 
 /* ============================================================
-   4.5. VEHICLE SELECTOR (Select Your Car — app style)
+   4.5. VEHICLE SELECTOR
 ============================================================ */
 
 function VehicleSection() {
@@ -462,7 +496,7 @@ function VehicleSection() {
 }
 
 /* ============================================================
-   5. CATEGORY SHOP (pills + filtered products)
+   5. CATEGORY SHOP
 ============================================================ */
 
 function CategoryShop() {
@@ -479,15 +513,9 @@ function CategoryShop() {
 
   useEffect(() => {
     setLoading(true);
-    const fields = `
-      _id, title, "slug": slug.current, price, condition, model,
-      "image": images[0].asset->url,
-      "subCat": subcategory->title,
-      "category": subcategory->parentCategory->title
-    `;
     const query = active === "all"
-      ? `*[_type == "product"] | order(_createdAt desc) [0...12] { ${fields} }`
-      : `*[_type == "product" && subcategory->parentCategory._id == $catId] | order(_createdAt desc) [0...12] { ${fields} }`;
+      ? `*[_type == "product"] | order(_createdAt desc) [0...12] { ${PRODUCT_FIELDS} }`
+      : `*[_type == "product" && subcategory->parentCategory._id == $catId] | order(_createdAt desc) [0...12] { ${PRODUCT_FIELDS} }`;
 
     client.fetch<Prod[]>(query, { catId: active })
       .then(setProds)
@@ -543,7 +571,7 @@ function CategoryShop() {
 }
 
 /* ============================================================
-   6. FEATURED SLIDER (max 20)
+   6. FEATURED SLIDER
 ============================================================ */
 
 function FeaturedSlider() {
@@ -552,12 +580,7 @@ function FeaturedSlider() {
 
   useEffect(() => {
     client.fetch<Prod[]>(
-      `*[_type == "product" && featured == true] | order(_createdAt desc) [0...20] {
-        _id, title, "slug": slug.current, price, condition, model,
-        "image": images[0].asset->url,
-        "subCat": subcategory->title,
-        "category": subcategory->parentCategory->title
-      }`
+      `*[_type == "product" && featured == true] | order(_createdAt desc) [0...20] { ${PRODUCT_FIELDS} }`
     ).then(setProds).catch(() => {});
   }, []);
 
@@ -596,7 +619,7 @@ function FeaturedSlider() {
 }
 
 /* ============================================================
-   7. SOCIAL PAGES
+   7. SOCIAL PAGES (unchanged — already fine)
 ============================================================ */
 
 const FB_URL = "https://www.facebook.com/profile.php?id=100064020401353";
@@ -674,7 +697,7 @@ function SocialPages() {
                 style={{ backgroundImage: `url(${IG_PROFILE_IMG})`, backgroundSize: "cover", backgroundPosition: "center" }} />
               <div className="relative z-10 w-full">
                 <div className="mx-auto mb-4 h-24 w-24 rounded-full border-4 border-pink-500 p-1 shadow-lg shadow-pink-500/20">
-                  <img src={IG_PROFILE_IMG} alt="IG Profile" className="h-full w-full rounded-full object-cover" />
+                  <img src={IG_PROFILE_IMG} alt="AutoBrothers Instagram" className="h-full w-full rounded-full object-cover" />
                 </div>
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white">AutoBrothers.Pk</h3>
                 <p className="mb-4 mt-1 text-xs text-gray-500 dark:text-gray-400">Japan Imported Auto Parts</p>
@@ -697,16 +720,14 @@ function SocialPages() {
 }
 
 /* ============================================================
-   HOME — final assembly
-   ✅ SPLASH SCREEN + VEHICLE SELECTOR
+   HOME — ✅ SPLASH AB OVERLAY HAI, CONTENT HAMESHA RENDER
+   (SEO: Google ko poora homepage HTML milta hai)
 ============================================================ */
 
 export default function HomeContent() {
-  const [mounted, setMounted] = useState(false);
   const [splashDone, setSplashDone] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
     if (sessionStorage.getItem("ab_splash_done") === "1") {
       setSplashDone(true);
     }
@@ -714,6 +735,7 @@ export default function HomeContent() {
 
   return (
     <div className="bg-white text-slate-900 dark:bg-[#0A1929] dark:text-white">
+      {/* ✅ Splash overlay — content ke UPAR dikhta hai, content block nahi karta */}
       {!splashDone && (
         <SplashScreen
           onFinish={() => {
@@ -723,18 +745,15 @@ export default function HomeContent() {
         />
       )}
 
-      {splashDone && mounted && (
-        <>
-          <Hero />
-          <NewsSection />
-          <NewArrivals />
-          <CategoriesSection />
-          <VehicleSection />   {/* ✅ Select Your Car */}
-          <CategoryShop />
-          <FeaturedSlider />
-          <SocialPages />
-        </>
-      )}
+      {/* ✅ Content HAMESHA render — SEO + hydration dono fix */}
+      <Hero />
+      <NewsSection />
+      <NewArrivals />
+      <CategoriesSection />
+      <VehicleSection />
+      <CategoryShop />
+      <FeaturedSlider />
+      <SocialPages />
     </div>
   );
 }

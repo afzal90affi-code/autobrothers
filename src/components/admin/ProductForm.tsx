@@ -43,9 +43,9 @@ export default function AddProductForm({
 
   const [imageFiles, setImageFiles] = useState<File[]>([])
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
-  /* ✅ EDIT MODE: existing images (jo Sanity me hain) */
+  /* EDIT MODE: existing images (jo Sanity me hain) */
   const [existingImages, setExistingImages] = useState<{ url: string; _key: string }[]>([])
-  /* ✅ EDIT MODE: jo existing images remove karni hain */
+  /* EDIT MODE: jo existing images remove karni hain */
   const [removedImageKeys, setRemovedImageKeys] = useState<string[]>([])
 
   const [saving, setSaving] = useState(false)
@@ -61,6 +61,30 @@ export default function AddProductForm({
   const [showSubInput, setShowSubInput] = useState(false)
   const [newSubTitle, setNewSubTitle] = useState("")
   const [addingSub, setAddingSub] = useState(false)
+
+  /* ============================================================
+     🏷️ DISCOUNT SYSTEM
+     - OldPrice daalo → % auto calculate
+     - % daalo → OldPrice auto calculate
+  ============================================================ */
+  const priceNum = Number(String(price).replace(/[^0-9]/g, "")) || 0;
+  const oldPriceNum = Number(String(oldPrice).replace(/[^0-9]/g, "")) || 0;
+
+  const discountPercent =
+    oldPriceNum > priceNum && priceNum > 0
+      ? Math.round(((oldPriceNum - priceNum) / oldPriceNum) * 100)
+      : 0;
+
+  /* ✅ Discount % se Old Price banao (price ke upar) */
+  const handleDiscountInput = (percent: number) => {
+    if (!priceNum || percent <= 0 || percent >= 100) {
+      setOldPrice("");
+      return;
+    }
+    /* oldPrice = price / (1 - discount%) */
+    const calculated = Math.round(priceNum / (1 - percent / 100));
+    setOldPrice(calculated.toLocaleString("en-PK"));
+  };
 
   /* ============================================================
      PREFILL (edit) — saari fields bharti hain
@@ -136,7 +160,7 @@ export default function AddProductForm({
         setCategories(catsData || [])
         setSubcats(subsData || [])
 
-        /* ✅ EDIT mode: category refs resolve karo (refs category list ke baad) */
+        /* EDIT mode: category refs resolve karo */
         if (editing) {
           setCatId(editing.catId || "")
           setSubcatId(editing.subcatId || "")
@@ -225,7 +249,7 @@ export default function AddProductForm({
     setImagePreviews((prev) => [...prev, ...newPreviews])
   }
 
-  /* ✅ EDIT MODE: existing image remove — key note karo */
+  /* EDIT MODE: existing image remove — key note karo */
   const removeExistingImage = (key: string) => {
     setExistingImages((prev) => prev.filter((im) => im._key !== key))
     setRemovedImageKeys((prev) => [...prev, key])
@@ -265,7 +289,7 @@ export default function AddProductForm({
       alert("Title, Category aur Subcategory zaruri hain!")
       return
     }
-    /* ✅ EDIT: existing images bhi count — kam az kam 1 honi chahiye */
+    /* EDIT: existing images bhi count — kam az kam 1 honi chahiye */
     if (existingImages.length + imageFiles.length === 0) {
       alert("Kam az kam 1 image honi chahiye!")
       return
@@ -274,14 +298,14 @@ export default function AddProductForm({
     setSaving(true)
 
     try {
-      /* ✅ NAYI images upload karo */
+      /* NAYI images upload karo */
       const assetIds: string[] = []
       for (const file of imageFiles) {
         const assetId = await adminUploadImage(file)
         assetIds.push(assetId)
       }
 
-      /* ✅ Common fields — create + update dono me jaayenge */
+      /* Common fields — create + update dono me jaayenge */
       const commonData: any = {
         title: title,
         price: price,
@@ -307,25 +331,8 @@ export default function AddProductForm({
 
       if (isEditing) {
         /* ============================================================
-           ✅ UPDATE MODE — slug/date UNCHANGED (SEO/backlinks safe)
+           UPDATE MODE — slug/date UNCHANGED (SEO/backlinks safe)
         ============================================================ */
-
-        /* Images: naye + jo existing bachi hain (removed hata ke) */
-        const imagesArray = [
-          ...existingImages
-            .filter((im) => !removedImageKeys.includes(im._key))
-            .map((im) => ({
-              _type: "image",
-              _key: im._key, /* same key rakho — Sanity array patch clean rahe */
-              asset: { _type: "reference", _ref: im.url.split("/").pop()?.split("-")[0] || "" },
-            })),
-        ]
-
-        /* ⚠️ Upar wala approach fragile hai — better: sirf NAYI images ke saath
-           poora array replace karo. Existing images ke liye direct asset refs
-           fetch karke use karo: */
-
-        /* Simpler robust approach: */
         const finalImages: any[] = []
         for (const im of existingImages.filter((e) => !removedImageKeys.includes(e._key))) {
           /* Existing image ka asset ref Sanity se fetch */
@@ -358,7 +365,7 @@ export default function AddProductForm({
         onClose()
       } else {
         /* ============================================================
-           CREATE MODE — sab kuch same jaise pehle
+           CREATE MODE
         ============================================================ */
         const imagesArray = assetIds.map((id) => ({
           _type: "image",
@@ -493,28 +500,81 @@ export default function AddProductForm({
               </div>
             </div>
 
-            {/* Price + Old Price */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* ✅ PRICE + DISCOUNT % SYSTEM */}
+            <div className="space-y-3 bg-[#13293D] border border-[#F5A623]/30 rounded-xl p-4">
+              <p className="text-[10px] font-bold text-[#F5A623] uppercase tracking-wider">
+                💰 Pricing + Discount
+              </p>
+
               <div>
-                <label className="text-xs text-gray-400 block mb-1.5">Price (Rs)</label>
+                <label className="text-xs text-gray-400 block mb-1.5">Price (Rs) *</label>
                 <input
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
                   placeholder="25,000"
-                  className="w-full px-4 py-3 bg-[#13293D] border border-[#1E3A52] rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#F5A623] transition-colors"
+                  className="w-full px-4 py-3 bg-[#0A1929] border border-[#1E3A52] rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#F5A623] transition-colors"
                 />
               </div>
+
+              {/* ✅ DISCOUNT % — direct input */}
               <div>
                 <label className="text-xs text-gray-400 block mb-1.5">
-                  Old Price <span className="text-gray-600">(optional)</span>
+                  Discount % <span className="text-gray-600">(dalo — Old Price auto ban jayega)</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={90}
+                    value={discountPercent || ""}
+                    onChange={(e) => handleDiscountInput(Number(e.target.value))}
+                    placeholder="e.g 20"
+                    disabled={!priceNum}
+                    className="flex-1 px-4 py-3 bg-[#0A1929] border border-[#1E3A52] rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#F5A623] disabled:opacity-40"
+                  />
+                  <span className={`text-sm font-black px-3 py-2.5 rounded-xl min-w-[64px] text-center transition-colors ${
+                    discountPercent > 0 ? "bg-rose-500 text-white" : "bg-[#1E3A52] text-gray-500"
+                  }`}>
+                    -{discountPercent}%
+                  </span>
+                </div>
+                {!priceNum && (
+                  <p className="text-[10px] text-gray-600 mt-1">Pehle Price daalo — phir % chalega</p>
+                )}
+              </div>
+
+              {/* Old Price — % se auto ya manually */}
+              <div>
+                <label className="text-xs text-gray-400 block mb-1.5">
+                  Old Price (Was Price) <span className="text-gray-600">(auto ya manual)</span>
                 </label>
                 <input
                   value={oldPrice}
                   onChange={(e) => setOldPrice(e.target.value)}
-                  placeholder="30,000"
-                  className="w-full px-4 py-3 bg-[#13293D] border border-[#1E3A52] rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#F5A623] transition-colors"
+                  placeholder={priceNum ? String(Math.round(priceNum / 0.8).toLocaleString("en-PK")) : "30,000"}
+                  className="w-full px-4 py-3 bg-[#0A1929] border border-[#1E3A52] rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#F5A623]"
                 />
+                <p className="text-[10px] text-gray-600 mt-1">
+                  % daala to auto ban gaya — ya seedha old price bhi likh sakte ho
+                </p>
               </div>
+
+              {/* ✅ LIVE DISCOUNT PREVIEW — jaisa site pe dikhega */}
+              {discountPercent > 0 && (
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30">
+                  <span className="text-2xl font-black text-rose-500">-{discountPercent}%</span>
+                  <div className="text-xs">
+                    <p className="text-gray-300">
+                      <span className="line-through text-gray-500">Rs {oldPriceNum.toLocaleString("en-PK")}</span>
+                      {" → "}
+                      <span className="font-bold text-[#F5A623]">Rs {priceNum.toLocaleString("en-PK")}</span>
+                    </p>
+                    <p className="text-gray-500">
+                      Bachat: Rs {(oldPriceNum - priceNum).toLocaleString("en-PK")}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Model + Mileage */}
@@ -704,13 +764,19 @@ export default function AddProductForm({
                 Product Images * <span className="text-gray-600">({totalImages}/8)</span>
               </label>
 
-              {/* ✅ EXISTING images (edit mode) */}
+              {/* EXISTING images (edit mode) */}
               {existingImages.filter((e) => !removedImageKeys.includes(e._key)).length > 0 && (
                 <div className="grid grid-cols-4 gap-2 mb-2">
                   {existingImages.filter((e) => !removedImageKeys.includes(e._key)).map((im, i) => (
                     <div key={im._key} className="relative group aspect-square rounded-lg overflow-hidden border border-green-500/30 bg-[#0D1F30]">
                       <img src={im.url} alt={`Existing ${i + 1}`} className="w-full h-full object-cover" />
                       <span className="absolute top-1 left-1 bg-green-500/80 text-white text-[8px] font-bold px-1 rounded">SAVED</span>
+                      {/* ✅ Discount badge — pehli existing image pe */}
+                      {i === 0 && discountPercent > 0 && (
+                        <span className="absolute bottom-1 left-1 bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded">
+                          -{discountPercent}%
+                        </span>
+                      )}
                       <button
                         type="button"
                         onClick={() => removeExistingImage(im._key)}
@@ -754,6 +820,12 @@ export default function AddProductForm({
                     <div key={i} className="relative group aspect-square rounded-lg overflow-hidden border border-[#1E3A52] bg-[#0D1F30]">
                       <img src={src} alt={`New ${i + 1}`} className="w-full h-full object-cover" />
                       <span className="absolute top-1 left-1 bg-[#F5A623] text-[#0A1929] text-[8px] font-bold px-1 rounded">NEW</span>
+                      {/* ✅ Discount badge — pehli nayi image pe (agar koi existing nahi) */}
+                      {i === 0 && existingImages.length === 0 && discountPercent > 0 && (
+                        <span className="absolute bottom-1 left-1 bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded">
+                          -{discountPercent}%
+                        </span>
+                      )}
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); removeImage(i) }}

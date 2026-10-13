@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
-/* ---------- Types — ✅ used-product fields added ---------- */
+/* ---------- Types — used-product fields ---------- */
 type Prod = {
   id: string;
   title: string;
@@ -20,6 +20,8 @@ type Prod = {
   qualityChecked?: boolean;
   japanImported?: boolean;
   model?: string;
+  brand?: string;
+  partNumber?: string;
   featured?: boolean;
   newArrival?: boolean;
   inStock?: boolean;
@@ -38,7 +40,7 @@ type Props = {
 const FB_URL = "https://www.facebook.com/profile.php?id=100064020401353";
 const IG_URL = "https://instagram.com/autobrothers.pk";
 const IG_PROFILE_IMG = "https://i.ibb.co/84814xg5/b16b-5542697ff3a9c-1296x.webp";
-const WHATSAPP_NUMBER = "923222806245"; // ✅ apna number — Order button isse jayega
+const WHATSAPP_NUMBER = "923222806245";
 
 const conditionStyle: Record<string, string> = {
   Good: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400",
@@ -46,18 +48,19 @@ const conditionStyle: Record<string, string> = {
   Bad: "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400",
 };
 
-/* ================= PRODUCT CARD — ✅ enhanced with used-product data ================= */
+/* ================= PRODUCT CARD — ✅ Brand + Part No + Savings ================= */
 function ProductCard({ p }: { p: Prod }) {
-  const oldPrice = p.oldPrice ? Number(p.oldPrice) : 0;
-  const newPrice = Number(p.price || 0);
-  const discount = oldPrice > newPrice ? Math.round(((oldPrice - newPrice) / oldPrice) * 100) : 0;
+  const oldPriceNum = p.oldPrice ? Number(String(p.oldPrice).replace(/[^0-9]/g, "")) : 0;
+  const newPriceNum = Number(String(p.price).replace(/[^0-9]/g, "")) || 0;
+  const discount = oldPriceNum > newPriceNum ? Math.round(((oldPriceNum - newPriceNum) / oldPriceNum) * 100) : 0;
+  /* ✅ NAYA: Savings */
+  const savings = discount > 0 ? oldPriceNum - newPriceNum : 0;
 
-  /* ✅ Score badge */
+  /* Score badge */
   const score = typeof p.conditionScore === "number" && p.conditionScore > 0 ? p.conditionScore : 0;
-  const scoreColor =
-    score >= 8 ? "bg-green-500" : score >= 6 ? "bg-amber-500" : "bg-red-500";
+  const scoreColor = score >= 8 ? "bg-green-500" : score >= 6 ? "bg-amber-500" : "bg-red-500";
 
-  /* ✅ SEO alt — Google Images ke liye */
+  /* SEO alt */
   const imgAlt = `${p.title}${p.condition ? ` — ${p.condition} condition${score ? ` ${score}/10` : ""}` : ""} used auto part${p.model ? `, fits ${p.model}` : ""} — AutoBrothers Pakistan`;
 
   return (
@@ -86,7 +89,7 @@ function ProductCard({ p }: { p: Prod }) {
           </div>
         )}
 
-        {/* ✅ SCORE + CONDITION + NEW badges */}
+        {/* SCORE + CONDITION + NEW badges */}
         <div className="absolute left-2 top-2 flex flex-col gap-1 items-start">
           {score > 0 && (
             <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-black text-white shadow-md ${scoreColor}`}>
@@ -104,11 +107,14 @@ function ProductCard({ p }: { p: Prod }) {
             </span>
           )}
         </div>
+
+        {/* ✅ DISCOUNT % badge — zyada visible (shadow + size) */}
         {discount > 0 && (
-          <span className="absolute right-2 top-2 rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-bold text-white">
+          <span className="absolute right-2 top-2 rounded-md bg-rose-500 px-2 py-1 text-[11px] font-black text-white shadow-lg">
             -{discount}%
           </span>
         )}
+
         {p.inStock === false && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-[1px] dark:bg-[#0A1929]/70">
             <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-bold text-white dark:bg-white dark:text-slate-900">
@@ -119,23 +125,44 @@ function ProductCard({ p }: { p: Prod }) {
       </div>
 
       <div className="flex flex-1 flex-col gap-1 p-3">
+        {/* ✅ NAYA: Brand label — title ke upar */}
+        {p.brand && (
+          <p className="text-[9px] font-bold uppercase tracking-widest text-[#F5A623]">
+            {p.brand}
+          </p>
+        )}
+
         <p className="truncate text-sm font-bold text-slate-900 dark:text-white" itemProp="name">{p.title}</p>
 
-        {/* ✅ Fits model */}
+        {/* ✅ NAYA: Part Number — mono chip */}
+        {p.partNumber && (
+          <p className="truncate text-[9px] font-mono font-semibold text-gray-500 dark:text-gray-400">
+            🔧 {p.partNumber}
+          </p>
+        )}
+
+        {/* Fits model */}
         {p.model && (
           <p className="truncate text-[10px] text-gray-500 dark:text-gray-400">🚗 Fits: {p.model}</p>
         )}
 
-        <div className="flex items-baseline gap-2" itemProp="offers" itemScope itemType="https://schema.org/Offer">
+        <div className="flex items-baseline gap-2 flex-wrap" itemProp="offers" itemScope itemType="https://schema.org/Offer">
           <meta itemProp="priceCurrency" content="PKR" />
-          <meta itemProp="price" content={String(newPrice)} />
-          <p className="text-sm font-black text-[#F5A623]">Rs {newPrice.toLocaleString("en-PK")}</p>
+          <meta itemProp="price" content={String(newPriceNum)} />
+          <p className="text-sm font-black text-[#F5A623]">Rs {newPriceNum.toLocaleString("en-PK")}</p>
           {discount > 0 && (
-            <p className="text-[11px] text-gray-400 line-through">Rs {oldPrice.toLocaleString("en-PK")}</p>
+            <p className="text-[11px] text-gray-400 line-through">Rs {oldPriceNum.toLocaleString("en-PK")}</p>
           )}
         </div>
 
-        {/* ✅ Used-product trust chips */}
+        {/* ✅ NAYA: Savings line */}
+        {savings > 0 && (
+          <p className="text-[10px] font-bold text-rose-500">
+            💰 Bachat: Rs {savings.toLocaleString("en-PK")}
+          </p>
+        )}
+
+        {/* Used-product trust chips */}
         {(p.mileage || p.warranty || p.qualityChecked || p.japanImported) && (
           <div className="flex flex-wrap gap-1">
             {p.mileage && (
@@ -304,10 +331,19 @@ function SocialPages() {
 export default function ShopContent({ prods, cats, initialCat = "", initialQ = "" }: Props) {
   const [active, setActive] = useState(initialCat);
   const [query, setQuery] = useState(initialQ);
+  /* ✅ NAYA: Brand filter */
+  const [brandFilter, setBrandFilter] = useState("");
   const featuredRef = useRef<HTMLDivElement>(null);
   const arrivalsRef = useRef<HTMLDivElement>(null);
 
   const activeCat = cats.find((c) => c.slug === active);
+
+  /* ✅ NAYA: Available brands — products se extract */
+  const availableBrands = useMemo(() => {
+    const set = new Set<string>();
+    prods.forEach((p) => { if (p.brand) set.add(p.brand); });
+    return Array.from(set).sort();
+  }, [prods]);
 
   const featured = useMemo(() => {
     const f = prods.filter((p) => p.featured);
@@ -319,14 +355,20 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
     return (n.length ? n : prods).slice(0, 10);
   }, [prods]);
 
+  /* ✅ UPDATED: brand filter bhi included */
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return prods.filter((p) => {
       const catOk = !active || p.catSlug === active;
-      const qOk = !q || p.title.toLowerCase().includes(q) || (p.description || "").toLowerCase().includes(q);
-      return catOk && qOk;
+      const brandOk = !brandFilter || p.brand === brandFilter;
+      const qOk = !q ||
+        p.title.toLowerCase().includes(q) ||
+        (p.description || "").toLowerCase().includes(q) ||
+        (p.partNumber || "").toLowerCase().includes(q) ||
+        (p.brand || "").toLowerCase().includes(q);
+      return catOk && brandOk && qOk;
     });
-  }, [prods, active, query]);
+  }, [prods, active, brandFilter, query]);
 
   const scroll = (ref: React.RefObject<HTMLDivElement | null>, dir: number) =>
     ref.current?.scrollBy({ left: dir * 280, behavior: "smooth" });
@@ -334,7 +376,7 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0A1929]">
 
-      {/* ===== 1. CATEGORY NAVBAR — ✅ productCount chips ke saath ===== */}
+      {/* ===== 1. CATEGORY NAVBAR ===== */}
       <div className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 backdrop-blur dark:border-[#1E3A52] dark:bg-[#0A1929]/95">
         <div className="mx-auto flex max-w-6xl items-center overflow-x-auto px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
 
@@ -364,7 +406,6 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
                 }`}
               >
                 {c.name}
-                {/* ✅ Product count chip */}
                 {typeof c.productCount === "number" && c.productCount > 0 && (
                   <span className="ml-1 rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-bold text-gray-500 dark:bg-[#1E3A52] dark:text-gray-400">
                     {c.productCount}
@@ -396,7 +437,6 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
             Auto Parts Shop
           </span>
           <h1 className="mt-3 text-3xl font-black leading-tight text-slate-900 sm:text-5xl dark:text-white">
-            {/* ✅ SEO: H1 me category + "Used" keyword */}
             {activeCat?.name ? (
               <>USED <span className="text-[#F5A623]">{activeCat.name.toUpperCase()}</span></>
             ) : (
@@ -422,10 +462,11 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
               <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
+              {/* ✅ UPDATED: search me part number + brand bhi match hoga */}
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search parts... e.g. corolla engine"
+                placeholder="Search parts... e.g. corolla, 2ZR, 16800-0D010"
                 aria-label="Search products"
                 className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-4 text-sm text-slate-900 shadow-sm outline-none placeholder:text-gray-400 focus:border-[#F5A623] sm:w-72 dark:border-[#1E3A52] dark:bg-[#13293D] dark:text-white"
               />
@@ -433,6 +474,40 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
           </div>
         </div>
       </section>
+
+      {/* ===== 2.5 ✅ BRAND FILTER BAR (naya) ===== */}
+      {availableBrands.length > 0 && (
+        <div className="mx-auto max-w-6xl px-4 pt-6">
+          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-gray-200 bg-white p-3 dark:border-[#1E3A52] dark:bg-[#112240]">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mr-1">
+              🏷️ Brand:
+            </span>
+            <button
+              onClick={() => setBrandFilter("")}
+              className={`rounded-full px-3 py-1 text-[11px] font-bold transition ${
+                !brandFilter
+                  ? "bg-[#F5A623] text-white shadow-md"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-[#1E3A52] dark:text-gray-400 dark:hover:text-white"
+              }`}
+            >
+              All Brands
+            </button>
+            {availableBrands.map((b) => (
+              <button
+                key={b}
+                onClick={() => setBrandFilter(brandFilter === b ? "" : b)}
+                className={`rounded-full px-3 py-1 text-[11px] font-bold transition ${
+                  brandFilter === b
+                    ? "bg-[#F5A623] text-white shadow-md"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-[#1E3A52] dark:text-gray-400 dark:hover:text-white"
+                }`}
+              >
+                {b}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ===== 3. NEW ARRIVALS ===== */}
       {newArrivals.length > 0 && (
@@ -474,13 +549,15 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
           <div>
             <h2 className="text-xl font-black text-slate-900 sm:text-2xl dark:text-white">
               {activeCat?.name || "All Products"}
+              {/* ✅ Brand filter active hone pe title me */}
+              {brandFilter && <span className="text-[#F5A623]"> — {brandFilter}</span>}
             </h2>
             <p className="text-xs text-gray-500 dark:text-gray-400">
               {query ? `"${query}" — ` : ""}{filtered.length} products
             </p>
           </div>
-          {(active || query) && (
-            <button onClick={() => { setActive(""); setQuery(""); }}
+          {(active || query || brandFilter) && (
+            <button onClick={() => { setActive(""); setQuery(""); setBrandFilter(""); }}
               className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50 dark:border-[#1E3A52] dark:bg-[#13293D] dark:text-gray-300 dark:hover:bg-[#112240]">
               Clear Filters
             </button>
@@ -490,7 +567,7 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
         {filtered.length === 0 ? (
           <div className="rounded-2xl bg-white py-14 text-center ring-1 ring-gray-100 dark:bg-[#112240] dark:ring-[#1E3A52]">
             <p className="text-sm font-bold text-slate-700 dark:text-white">Koi product nahi mila</p>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Doosri category try karo ya search clear karo.</p>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Doosri category ya brand try karo, ya search clear karo.</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">

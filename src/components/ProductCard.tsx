@@ -21,12 +21,14 @@ export default function ProductCard({ product }: { product: any }) {
       ? "bg-amber-500"
       : "bg-red-500";
 
-  /* ✅ Discount % calculate */
+  /* ✅ Discount % + Savings calculate */
   const oldPriceNum = product.oldPrice ? Number(String(product.oldPrice).replace(/[^0-9]/g, "")) : 0;
   const newPriceNum = Number(String(product.price).replace(/[^0-9]/g, "")) || 0;
   const discount = oldPriceNum > newPriceNum ? Math.round(((oldPriceNum - newPriceNum) / oldPriceNum) * 100) : 0;
+  /* ✅ NAYA: Savings amount — kitni bachat */
+  const savings = discount > 0 ? oldPriceNum - newPriceNum : 0;
 
-  /* ✅ Price formatted — 25000 → 25,000 */
+  /* Price formatted */
   const formattedPrice = newPriceNum ? newPriceNum.toLocaleString("en-PK") : product.price;
   const formattedOldPrice = oldPriceNum ? oldPriceNum.toLocaleString("en-PK") : "";
 
@@ -63,19 +65,21 @@ export default function ProductCard({ product }: { product: any }) {
             />
           )}
 
-          {/* SCORE + DISCOUNT badges */}
+          {/* SCORE badge — top-left */}
           {conditionScore > 0 && (
             <span className={`absolute top-2 left-2 text-[10px] font-black text-white px-2 py-1 rounded-md ${scoreColor} shadow-md`}>
               {conditionScore}/10
             </span>
           )}
-          {/* ✅ Discount % badge — top-right */}
+
+          {/* ✅ DISCOUNT % badge — top-right (rose, flash jaisa) */}
           {discount > 0 && (
-            <span className="absolute top-2 right-2 text-[10px] font-black px-2 py-1 rounded-md bg-rose-500 text-white shadow-md">
+            <span className="absolute top-2 right-2 text-[11px] font-black px-2 py-1 rounded-md bg-rose-500 text-white shadow-lg">
               -{discount}%
             </span>
           )}
 
+          {/* Condition label — sirf jab discount nahi (overlap na ho) */}
           {product.condition && discount === 0 && (
             <span className="absolute top-2 right-2 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-md bg-black/60 text-white backdrop-blur-sm">
               {product.condition}
@@ -92,11 +96,25 @@ export default function ProductCard({ product }: { product: any }) {
 
       {/* ---------- INFO ---------- */}
       <div className="p-3 flex flex-col flex-1">
+        {/* ✅ NAYA: Brand — chhota label title ke upar */}
+        {product.brand && (
+          <p className="text-[9px] font-bold uppercase tracking-widest text-[#F5A623] mb-0.5">
+            {product.brand}
+          </p>
+        )}
+
         <Link href={`/product/${product.slug}`} title={product.title}>
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2 group-hover:text-[#F5A623]" itemProp="name">
             {product.title}
           </h3>
         </Link>
+
+        {/* ✅ NAYA: Part Number — mechanics ke liye (mono chip) */}
+        {product.partNumber && (
+          <p className="mt-1 text-[9px] font-mono font-semibold text-gray-500 dark:text-gray-400 truncate">
+            🔧 {product.partNumber}
+          </p>
+        )}
 
         {product.model && (
           <p className="mt-1 text-[10px] text-gray-500 dark:text-gray-400 flex items-center gap-1">
@@ -113,7 +131,7 @@ export default function ProductCard({ product }: { product: any }) {
           )}
           {product.warranty && (
             <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-              🛡 {product.warranty}d warranty
+              🛡 {product.warranty}d
             </span>
           )}
           {product.qualityChecked && (
@@ -128,7 +146,7 @@ export default function ProductCard({ product }: { product: any }) {
           )}
         </div>
 
-        {/* PRICE */}
+        {/* PRICE + ✅ SAVINGS */}
         <div className="mt-2 flex items-center gap-2 flex-wrap" itemProp="offers" itemScope itemType="https://schema.org/Offer">
           <meta itemProp="priceCurrency" content="PKR" />
           <meta itemProp="price" content={String(newPriceNum)} />
@@ -143,6 +161,13 @@ export default function ProductCard({ product }: { product: any }) {
             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400">In Stock</span>
           )}
         </div>
+
+        {/* ✅ NAYA: Savings line — "Bachat Rs X" */}
+        {discount > 0 && (
+          <p className="mt-1 text-[10px] font-bold text-rose-500">
+            💰 Aap bachayen: Rs {savings.toLocaleString("en-PK")}
+          </p>
+        )}
 
         {/* ADD TO CART */}
         <button

@@ -4,6 +4,8 @@ import type { Metadata } from "next";
 import { client } from "../../../lib/sanityClient";
 import ProductGallery from "../../../components/ProductGallery";
 import AddToCartButton from "../../../components/AddToCartButton";
+import CopyButton from "../../../components/CopyButton";
+import ExpandableDetails from "../../../components/ExpandableDetails";
 
 export const revalidate = 60;
 
@@ -26,7 +28,7 @@ function getConditionScore(p: any): number {
 }
 
 /* ============================================================
-   METADATA — ✅ seoTitle/seoDesc PRIORITY + naye fields keywords
+   METADATA — seoTitle/seoDesc PRIORITY + naye fields keywords
 ============================================================ */
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
   const product: any = await client.fetch(
@@ -46,7 +48,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   const og = product.img ? `${product.img}?w=1200&auto=format&q=80` : undefined;
   const url = `${BASE_URL}/product/${params.slug}`;
 
-  /* ✅ SEO priority: seoDesc > description > auto-generated */
+  /* SEO priority: seoDesc > description > auto-generated */
   const desc =
     product.seoDesc ||
     product.description?.slice(0, 160) ||
@@ -54,33 +56,27 @@ export async function generateMetadata({ params }: { params: { slug: string } })
       product.condition ? `${product.condition} condition (${score}/10)` : ""
     }${product.mileage ? `, ${product.mileage} km` : ""} used auto part with all-Pakistan delivery.`;
 
-  /* ✅ SEO priority: seoTitle > auto-built */
+  /* SEO priority: seoTitle > auto-built */
   const metaTitle =
     product.seoTitle ||
     `${product.title}${product.price ? ` — Rs ${product.price}` : " — Best Price"}${product.condition ? ` | ${product.condition} (${score}/10)` : ""}`;
 
-  /* ✅ Keywords — ab brand + part number + engine code bhi
-     (mechanics inhi se search karte hain) */
+  /* Keywords — brand + part number + engine code */
   const keywords = [
     product.title,
     `used ${product.title}`,
-    /* Brand combos */
     product.brand ? `${product.brand} ${product.subTitle ?? "parts"}` : "",
     product.brand ? `used ${product.brand} parts Pakistan` : "",
     product.brand && product.subTitle ? `${product.brand} ${product.subTitle} price in Pakistan` : "",
-    /* ✅ Part Number — mechanics ka search */
     product.partNumber ?? "",
     product.partNumber ? `${product.partNumber} price in Pakistan` : "",
     product.partNumber ? `${product.partNumber} original` : "",
-    /* ✅ Engine Code — engine buyers ka search */
     product.engineCode ?? "",
     product.engineCode ? `${product.engineCode} engine for sale in Pakistan` : "",
     product.engineCode ? `used ${product.engineCode} engine` : "",
     product.engineCode && product.brand ? `${product.brand} ${product.engineCode}` : "",
-    /* Model combos */
     product.model ? `${product.title} ${product.model}` : "",
     product.model ? `used ${product.title} for ${product.model}` : "",
-    /* Generic */
     product.subTitle ?? "",
     `used ${product.subTitle ?? "auto parts"} Pakistan`,
     product.japanImported ? "japan imported auto parts Pakistan" : "",
@@ -158,7 +154,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
   }
 
   /* ============================================================
-     PRODUCT JSON-LD — ✅ brand REAL brand, partNumber as mpn
+     PRODUCT JSON-LD — brand REAL brand, partNumber as mpn
   ============================================================ */
   const conditionMap: Record<string, string> = {
     Good: "https://schema.org/UsedCondition",
@@ -210,10 +206,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
       `${product.title} — genuine auto part available at ${SITE_NAME}. All Pakistan delivery.`,
     image: product.images?.map((im: any) => `${im.url}?w=1200&auto=format&q=80`),
     sku: product._id,
-    /* ✅ mpn = Manufacturer Part Number — ab REAL part number
-       (pehle slug tha jo galat tha) */
     mpn: product.partNumber || product.slug,
-    /* ✅ brand = ACTUAL car brand (Toyota/Honda) — pehle SITE_NAME tha */
     brand: { "@type": "Brand", name: product.brand || SITE_NAME },
     category: product.subTitle || undefined,
     additionalProperty: additionalProps.length > 0 ? additionalProps : undefined,
@@ -246,7 +239,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
 
   /* ============================================================
      BREADCRUMB JSON-LD
-     ============================================================ */
+  ============================================================ */
   const breadcrumbItems: { name: string; item: string }[] = [
     { name: "Home", item: BASE_URL },
     { name: "Shop", item: `${BASE_URL}/products` },
@@ -270,7 +263,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
     })),
   };
 
-  /* ✅ WhatsApp text me brand + part number + engine code bhi */
+  /* WhatsApp text — brand + part number + engine code */
   const waText = encodeURIComponent(
     `Assalam o Alaikum! Mujhe ye part chahiye:\n\n*${product.title}*${product.brand ? `\nBrand: ${product.brand}` : ""}${product.partNumber ? `\nPart No: ${product.partNumber}` : ""}${product.engineCode ? `\nEngine: ${product.engineCode}` : ""}\n${product.price ? `Price: Rs ${product.price}\n` : ""}Condition: ${product.condition} (${score}/10)${product.mileage ? `\nMileage: ${product.mileage} km` : ""}${product.model ? `\nModel: ${product.model}` : ""}\n\nLink: ${BASE_URL}/product/${product.slug}`
   );
@@ -281,8 +274,15 @@ export default async function ProductPage({ params }: { params: { slug: string }
     Bad: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400",
   };
 
-  /* ✅ Specs grid — naye fields included */
-  const hasSpecs = product.model || product.mileage || product.warranty || product.japanImported || product.brand || product.partNumber || product.engineCode;
+  /* ✅ Specs list — compact ExpandableDetails ke liye */
+  const specsList: { icon: string; label: string; value: string; mono?: boolean }[] = [];
+  if (product.brand) specsList.push({ icon: "🏷️", label: "Brand", value: product.brand });
+  if (product.partNumber) specsList.push({ icon: "🔧", label: "Part Number", value: product.partNumber, mono: true });
+  if (product.engineCode) specsList.push({ icon: "⚙️", label: "Engine Code", value: product.engineCode });
+  if (product.mileage) specsList.push({ icon: "🛣️", label: "Mileage", value: `${product.mileage} km` });
+  if (product.warranty) specsList.push({ icon: "🛡️", label: "Warranty", value: `${product.warranty} days` });
+  if (product.model) specsList.push({ icon: "🚗", label: "Fits Models", value: product.model });
+  if (product.subTitle) specsList.push({ icon: "📦", label: "Category", value: product.subTitle });
 
   return (
     <main className="min-h-screen bg-white dark:bg-gray-950">
@@ -329,7 +329,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
             )}
           </div>
 
-          {/* ✅ BRAND line — title ke upar (jaise Amazon me hota hai) */}
+          {/* BRAND line — title ke upar */}
           {product.brand && (
             <p className="text-xs font-bold uppercase tracking-widest text-[#F5A623] mb-1">
               {product.brand}
@@ -338,19 +338,13 @@ export default async function ProductPage({ params }: { params: { slug: string }
 
           <h1 className="text-3xl md:text-4xl font-bold leading-tight text-gray-900 dark:text-white">{product.title}</h1>
 
-          {/* ✅ PART NUMBER + ENGINE CODE — title ke neeche prominent
-              (mechanics sabse pehle yehi dekhte hain) */}
+          {/* PART NUMBER + ENGINE CODE chips — with CopyButton client component */}
           {(product.partNumber || product.engineCode) && (
             <div className="mt-3 flex flex-wrap gap-2">
               {product.partNumber && (
                 <span className="inline-flex items-center gap-1.5 text-xs font-mono font-bold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-3 py-1.5 rounded-lg">
                   🔧 P/N: {product.partNumber}
-                  <button
-                    type="button"
-                    onClick={() => navigator.clipboard.writeText(product.partNumber)}
-                    title="Copy part number"
-                    className="text-gray-400 hover:text-[#F5A623] transition"
-                  >📋</button>
+                  <CopyButton text={product.partNumber} label="part number" />
                 </span>
               )}
               {product.engineCode && (
@@ -386,113 +380,18 @@ export default async function ProductPage({ params }: { params: { slug: string }
             </span>
           </div>
 
-          {/* CONDITION SCORE — visual X/10 with progress bar */}
-          {score > 0 && (
-            <div className="mt-5 p-4 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                  Condition Score
-                </p>
-                <span className={`text-white text-sm font-black px-2.5 py-0.5 rounded-lg ${scoreColor}`}>
-                  {score}/10
-                </span>
-              </div>
-              <div className="h-2.5 w-full bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
-                <div className={`h-full rounded-full ${scoreColor} transition-all`} style={{ width: `${scorePercent}%` }} />
-              </div>
-              <div className="flex justify-between mt-1 text-[9px] text-gray-400">
-                <span>0</span>
-                <span>5</span>
-                <span>10</span>
-              </div>
-              {product.condition && (
-                <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
-                  Rated <strong>{product.condition}</strong> by our inspection team{product.qualityChecked ? " — fully tested before listing" : ""}.
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* ✅ USED PRODUCT SPECS — Brand + Part No + Engine Code added */}
-          {hasSpecs && (
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              {product.brand && (
-                <div className="flex items-center gap-2 p-3 rounded-xl border border-gray-100 dark:border-gray-800 text-xs">
-                  <span className="text-lg">🏷️</span>
-                  <div>
-                    <p className="text-[9px] uppercase tracking-wider text-gray-400">Brand</p>
-                    <p className="font-bold text-gray-900 dark:text-white">{product.brand}</p>
-                  </div>
-                </div>
-              )}
-              {product.partNumber && (
-                <div className="flex items-center gap-2 p-3 rounded-xl border border-gray-100 dark:border-gray-800 text-xs">
-                  <span className="text-lg">🔧</span>
-                  <div>
-                    <p className="text-[9px] uppercase tracking-wider text-gray-400">Part Number</p>
-                    <p className="font-bold text-gray-900 dark:text-white font-mono text-[11px]">{product.partNumber}</p>
-                  </div>
-                </div>
-              )}
-              {product.engineCode && (
-                <div className="flex items-center gap-2 p-3 rounded-xl border border-gray-100 dark:border-gray-800 text-xs">
-                  <span className="text-lg">⚙️</span>
-                  <div>
-                    <p className="text-[9px] uppercase tracking-wider text-gray-400">Engine Code</p>
-                    <p className="font-bold text-gray-900 dark:text-white">{product.engineCode}</p>
-                  </div>
-                </div>
-              )}
-              {product.mileage && (
-                <div className="flex items-center gap-2 p-3 rounded-xl border border-gray-100 dark:border-gray-800 text-xs">
-                  <span className="text-lg">🛣️</span>
-                  <div>
-                    <p className="text-[9px] uppercase tracking-wider text-gray-400">Mileage</p>
-                    <p className="font-bold text-gray-900 dark:text-white">{product.mileage} km</p>
-                  </div>
-                </div>
-              )}
-              {product.warranty && (
-                <div className="flex items-center gap-2 p-3 rounded-xl border border-gray-100 dark:border-gray-800 text-xs">
-                  <span className="text-lg">🛡️</span>
-                  <div>
-                    <p className="text-[9px] uppercase tracking-wider text-gray-400">Warranty</p>
-                    <p className="font-bold text-gray-900 dark:text-white">{product.warranty} days</p>
-                  </div>
-                </div>
-              )}
-              {product.model && (
-                <div className="flex items-center gap-2 p-3 rounded-xl border border-gray-100 dark:border-gray-800 text-xs">
-                  <span className="text-lg">🚗</span>
-                  <div>
-                    <p className="text-[9px] uppercase tracking-wider text-gray-400">Fits Models</p>
-                    <p className="font-bold text-gray-900 dark:text-white truncate">{product.model}</p>
-                  </div>
-                </div>
-              )}
-              {product.subTitle && (
-                <div className="flex items-center gap-2 p-3 rounded-xl border border-gray-100 dark:border-gray-800 text-xs">
-                  <span className="text-lg">📦</span>
-                  <div>
-                    <p className="text-[9px] uppercase tracking-wider text-gray-400">Category</p>
-                    <p className="font-bold text-gray-900 dark:text-white truncate">{product.subTitle}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Description */}
-          {product.description ? (
-            <article className="mt-5 text-gray-600 dark:text-gray-300 leading-7 whitespace-pre-line">
-              {product.description}
-            </article>
-          ) : (
-            <p className="mt-5 text-gray-500 dark:text-gray-400 leading-7">
-              {product.title} — {product.condition} condition ({score}/10){product.mileage ? `, ${product.mileage} km driven` : ""}{product.model ? `, fits ${product.model}` : ""}.
-              Genuine quality checked used part with all-Pakistan delivery. Order via WhatsApp.
-            </p>
-          )}
+          {/* ✅ COMPACT + EXPANDABLE DETAILS — client component
+              (score bar chota + short desc + 3 specs + More Details button) */}
+          <ExpandableDetails
+            description={product.description}
+            fallbackText={`${product.title} — ${product.condition} condition (${score}/10)${product.mileage ? `, ${product.mileage} km driven` : ""}${product.model ? `, fits ${product.model}` : ""}. Genuine quality checked used part with all-Pakistan delivery. Order via WhatsApp.`}
+            score={score}
+            scoreColor={scoreColor}
+            scorePercent={scorePercent}
+            condition={product.condition}
+            qualityChecked={product.qualityChecked}
+            specs={specsList}
+          />
 
           {/* ADD TO CART */}
           {product.inStock && priceNum && (

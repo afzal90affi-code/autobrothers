@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
-/* ---------- Types — used-product fields ---------- */
+/* ---------- Types ---------- */
 type Prod = {
   id: string;
   title: string;
@@ -42,166 +42,105 @@ const IG_URL = "https://instagram.com/autobrothers.pk";
 const IG_PROFILE_IMG = "https://i.ibb.co/84814xg5/b16b-5542697ff3a9c-1296x.webp";
 const WHATSAPP_NUMBER = "923222806245";
 
-const conditionStyle: Record<string, string> = {
-  Good: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400",
-  Average: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
-  Bad: "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400",
-};
-
-/* ================= PRODUCT CARD — ✅ Brand + Part No + Savings ================= */
+/* ============================================================
+   ✅ PRODUCT CARD — NO NESTED LINKS
+   Image apne Link me, details bahar, View Product alag Link
+   — koi <a> ke andar <a> nahi = hydration safe
+============================================================ */
 function ProductCard({ p }: { p: Prod }) {
   const oldPriceNum = p.oldPrice ? Number(String(p.oldPrice).replace(/[^0-9]/g, "")) : 0;
   const newPriceNum = Number(String(p.price).replace(/[^0-9]/g, "")) || 0;
   const discount = oldPriceNum > newPriceNum ? Math.round(((oldPriceNum - newPriceNum) / oldPriceNum) * 100) : 0;
-  /* ✅ NAYA: Savings */
-  const savings = discount > 0 ? oldPriceNum - newPriceNum : 0;
 
-  /* Score badge */
-  const score = typeof p.conditionScore === "number" && p.conditionScore > 0 ? p.conditionScore : 0;
-  const scoreColor = score >= 8 ? "bg-green-500" : score >= 6 ? "bg-amber-500" : "bg-red-500";
-
-  /* SEO alt */
-  const imgAlt = `${p.title}${p.condition ? ` — ${p.condition} condition${score ? ` ${score}/10` : ""}` : ""} used auto part${p.model ? `, fits ${p.model}` : ""} — AutoBrothers Pakistan`;
+  const imgAlt = `${p.title}${p.condition ? ` — ${p.condition} condition` : ""} used auto part${p.model ? `, fits ${p.model}` : ""} — AutoBrothers Pakistan`;
 
   return (
     <div
-      className="group flex h-full flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-100 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg dark:bg-[#112240] dark:ring-[#1E3A52] dark:hover:shadow-black/40"
+      className="group flex h-full flex-col overflow-hidden rounded-lg bg-white dark:bg-[#112240] border border-gray-200/80 dark:border-[#1E3A52] transition-all duration-300 hover:shadow-md dark:hover:shadow-black/40"
       itemScope
       itemType="https://schema.org/Product"
     >
-      <div className="relative overflow-hidden">
-        {p.image ? (
-          <img
-            src={p.image}
-            alt={imgAlt}
-            loading="lazy"
-            width={800}
-            height={800}
-            itemProp="image"
-            className="h-36 w-full object-cover transition-transform duration-500 group-hover:scale-105 sm:h-44"
-          />
-        ) : (
-          <div className="flex h-36 w-full items-center justify-center bg-gray-50 dark:bg-[#0D1F30] sm:h-44">
-            <svg className="h-10 w-10 text-gray-300 dark:text-[#1E3A52]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M20 7.5v9a1.5 1.5 0 01-.75 1.3l-6.5 3.75a1.5 1.5 0 01-1.5 0L4.75 17.8A1.5 1.5 0 014 16.5v-9a1.5 1.5 0 01.75-1.3l6.5-3.75a1.5 1.5 0 011.5 0l6.5 3.75A1.5 1.5 0 0120 7.5z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 7.5L12 12l7.5-4.5M12 21v-9" />
-            </svg>
-          </div>
-        )}
-
-        {/* SCORE + CONDITION + NEW badges */}
-        <div className="absolute left-2 top-2 flex flex-col gap-1 items-start">
-          {score > 0 && (
-            <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-black text-white shadow-md ${scoreColor}`}>
-              {score}/10
-            </span>
-          )}
-          {p.condition && (
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${conditionStyle[p.condition] ?? ""}`}>
-              {p.condition}
-            </span>
-          )}
-          {p.newArrival && (
-            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
-              NEW
-            </span>
+      {/* IMAGE — apna Link (nested nahi) */}
+      <Link href={`/product/${p.id}`} title={p.title}>
+        <div className="relative aspect-square overflow-hidden bg-white dark:bg-[#0D1F30]">
+          {p.image ? (
+            <img
+              src={p.image}
+              alt={imgAlt}
+              loading="lazy"
+              width={600}
+              height={600}
+              itemProp="image"
+              className="h-full w-full object-contain p-2 transition-transform duration-500 group-hover:scale-105"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <svg className="h-10 w-10 text-gray-200 dark:text-[#1E3A52]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M20 7.5v9a1.5 1.5 0 01-.75 1.3l-6.5 3.75a1.5 1.5 0 01-1.5 0L4.75 17.8A1.5 1.5 0 014 16.5v-9a1.5 1.5 0 01.75-1.3l6.5-3.75a1.5 1.5 0 011.5 0l6.5 3.75A1.5 1.5 0 0120 7.5z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 7.5L12 12l7.5-4.5M12 21v-9" />
+              </svg>
+            </div>
           )}
         </div>
+      </Link>
 
-        {/* ✅ DISCOUNT % badge — zyada visible (shadow + size) */}
-        {discount > 0 && (
-          <span className="absolute right-2 top-2 rounded-md bg-rose-500 px-2 py-1 text-[11px] font-black text-white shadow-lg">
-            -{discount}%
-          </span>
-        )}
+      {/* DETAILS */}
+      <div className="flex flex-1 flex-col gap-0.5 border-t border-gray-100 dark:border-[#1E3A52] p-3">
+        {/* Brand */}
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+          {p.brand || "AUTOBROTHERS"}
+        </p>
 
-        {p.inStock === false && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-[1px] dark:bg-[#0A1929]/70">
-            <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-bold text-white dark:bg-white dark:text-slate-900">
-              Out of Stock
-            </span>
-          </div>
-        )}
-      </div>
+        {/* Title — plain text (Link andar nahi) */}
+        <p className="line-clamp-2 text-[15px] font-semibold leading-snug text-gray-900 dark:text-white" itemProp="name">
+          {p.title}
+        </p>
 
-      <div className="flex flex-1 flex-col gap-1 p-3">
-        {/* ✅ NAYA: Brand label — title ke upar */}
-        {p.brand && (
-          <p className="text-[9px] font-bold uppercase tracking-widest text-[#F5A623]">
-            {p.brand}
-          </p>
-        )}
-
-        <p className="truncate text-sm font-bold text-slate-900 dark:text-white" itemProp="name">{p.title}</p>
-
-        {/* ✅ NAYA: Part Number — mono chip */}
-        {p.partNumber && (
-          <p className="truncate text-[9px] font-mono font-semibold text-gray-500 dark:text-gray-400">
-            🔧 {p.partNumber}
-          </p>
-        )}
-
-        {/* Fits model */}
-        {p.model && (
-          <p className="truncate text-[10px] text-gray-500 dark:text-gray-400">🚗 Fits: {p.model}</p>
-        )}
-
-        <div className="flex items-baseline gap-2 flex-wrap" itemProp="offers" itemScope itemType="https://schema.org/Offer">
-          <meta itemProp="priceCurrency" content="PKR" />
-          <meta itemProp="price" content={String(newPriceNum)} />
-          <p className="text-sm font-black text-[#F5A623]">Rs {newPriceNum.toLocaleString("en-PK")}</p>
-          {discount > 0 && (
-            <p className="text-[11px] text-gray-400 line-through">Rs {oldPriceNum.toLocaleString("en-PK")}</p>
-          )}
-        </div>
-
-        {/* ✅ NAYA: Savings line */}
-        {savings > 0 && (
-          <p className="text-[10px] font-bold text-rose-500">
-            💰 Bachat: Rs {savings.toLocaleString("en-PK")}
-          </p>
-        )}
-
-        {/* Used-product trust chips */}
-        {(p.mileage || p.warranty || p.qualityChecked || p.japanImported) && (
-          <div className="flex flex-wrap gap-1">
-            {p.mileage && (
-              <span className="rounded-md bg-gray-100 px-1.5 py-0.5 text-[9px] font-semibold text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                🛣 {p.mileage} km
-              </span>
-            )}
-            {p.warranty && (
-              <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
-                🛡 {p.warranty}d
-              </span>
-            )}
-            {p.qualityChecked && (
-              <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-[9px] font-semibold text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
-                ✅ Tested
-              </span>
-            )}
-            {p.japanImported && (
-              <span className="rounded-md bg-purple-50 px-1.5 py-0.5 text-[9px] font-semibold text-purple-600 dark:bg-purple-500/10 dark:text-purple-400">
-                🇯🇵 Japan
-              </span>
+        {/* Price + Cart */}
+        <div className="mt-auto flex items-center justify-between pt-2" itemProp="offers" itemScope itemType="https://schema.org/Offer">
+          <div>
+            <meta itemProp="priceCurrency" content="PKR" />
+            <meta itemProp="price" content={String(newPriceNum)} />
+            <p className="text-base font-bold text-gray-900 dark:text-white">
+              Rs.{newPriceNum.toLocaleString("en-PK")}
+            </p>
+            {discount > 0 && (
+              <p className="text-[10px] text-gray-400 line-through">
+                Rs.{oldPriceNum.toLocaleString("en-PK")}
+              </p>
             )}
           </div>
-        )}
 
-        <div className="mt-auto flex items-center justify-between pt-1">
-          {p.category && (
-            <span className="truncate rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-[#F5A623]/15 dark:text-[#F5A623]">
-              {p.category}
-            </span>
-          )}
           {p.inStock !== false && (
-            <a href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`Hi! I want to order: ${p.title} — Rs ${p.price}`)}`}
-              target="_blank" rel="noopener noreferrer"
-              className="rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600">
-              Order
+            <a
+              href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`Hi! I want to order: ${p.title} — Rs ${p.price}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Order on WhatsApp"
+              aria-label={`Order ${p.title}`}
+              className="flex h-8 w-8 items-center justify-center text-gray-400 transition hover:text-emerald-500"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="9" cy="21" r="1" />
+                <circle cx="20" cy="21" r="1" />
+                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+              </svg>
             </a>
           )}
         </div>
+
+        {/* View Product */}
+        {p.inStock !== false && (
+          <Link
+            href={`/product/${p.id}`}
+            className="mt-2 flex items-center justify-center gap-1.5 w-full rounded-lg border border-gray-300 dark:border-[#1E3A52] py-2 text-xs font-bold text-gray-700 dark:text-gray-300 transition hover:bg-[#F5A623] hover:border-[#F5A623] hover:text-white dark:hover:text-[#0A1929]"
+          >
+            View Product
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          </Link>
+        )}
       </div>
     </div>
   );
@@ -233,7 +172,7 @@ function SectionHead({ tag, title, showArrows, onPrev, onNext }: {
   );
 }
 
-/* ================= SOCIAL PAGES (unchanged) ================= */
+/* ================= SOCIAL PAGES ================= */
 function SocialPages() {
   return (
     <section className="border-t border-gray-200 py-12 dark:border-[#1E3A52] md:py-16">
@@ -327,18 +266,32 @@ function SocialPages() {
   );
 }
 
-/* ================= SHOP CONTENT ================= */
+/* ============================================================
+   SHOP CONTENT
+   ✅ KOI BAHAR WALA <Link> PRODUCT CARD PE NAHI — hydration safe
+============================================================ */
 export default function ShopContent({ prods, cats, initialCat = "", initialQ = "" }: Props) {
   const [active, setActive] = useState(initialCat);
   const [query, setQuery] = useState(initialQ);
-  /* ✅ NAYA: Brand filter */
   const [brandFilter, setBrandFilter] = useState("");
   const featuredRef = useRef<HTMLDivElement>(null);
   const arrivalsRef = useRef<HTMLDivElement>(null);
 
   const activeCat = cats.find((c) => c.slug === active);
 
-  /* ✅ NAYA: Available brands — products se extract */
+  /* Clean navbar: junk filter + empty hide */
+  const visibleCats = useMemo(() => {
+    const junkPatterns = ["test", "delete", "demo", "sample", "dummy", "asdf", "check", "us news"];
+    return cats.filter((c) => {
+      const title = c.name.toLowerCase().trim();
+      const isJunk = junkPatterns.some((j) => title.includes(j));
+      if (isJunk) return false;
+      if (typeof c.productCount === "number" && c.productCount === 0) return false;
+      return true;
+    });
+  }, [cats]);
+
+  /* Available brands */
   const availableBrands = useMemo(() => {
     const set = new Set<string>();
     prods.forEach((p) => { if (p.brand) set.add(p.brand); });
@@ -355,7 +308,6 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
     return (n.length ? n : prods).slice(0, 10);
   }, [prods]);
 
-  /* ✅ UPDATED: brand filter bhi included */
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return prods.filter((p) => {
@@ -376,9 +328,9 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0A1929]">
 
-      {/* ===== 1. CATEGORY NAVBAR ===== */}
+      {/* ===== 1. CATEGORY NAVBAR — center (desktop) ===== */}
       <div className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 backdrop-blur dark:border-[#1E3A52] dark:bg-[#0A1929]/95">
-        <div className="mx-auto flex max-w-6xl items-center overflow-x-auto px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="mx-auto flex max-w-6xl items-center justify-start md:justify-center overflow-x-auto px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
 
           <button
             onClick={() => setActive("")}
@@ -394,7 +346,7 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
             }`} />
           </button>
 
-          {cats.map((c) => (
+          {visibleCats.map((c) => (
             <span key={c.slug} className="flex items-center">
               <span className="mx-3 h-4 w-px shrink-0 bg-gray-300 dark:bg-[#1E3A52]" aria-hidden="true" />
               <button
@@ -406,11 +358,6 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
                 }`}
               >
                 {c.name}
-                {typeof c.productCount === "number" && c.productCount > 0 && (
-                  <span className="ml-1 rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-bold text-gray-500 dark:bg-[#1E3A52] dark:text-gray-400">
-                    {c.productCount}
-                  </span>
-                )}
                 <span className={`absolute inset-x-0 -bottom-0.5 h-[2px] origin-left rounded-full bg-gradient-to-r from-[#F5A623] to-[#FFB94D] transition-transform duration-300 ${
                   active === c.slug ? "scale-x-100" : "scale-x-0"
                 }`} />
@@ -462,7 +409,6 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
               <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
-              {/* ✅ UPDATED: search me part number + brand bhi match hoga */}
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -475,7 +421,7 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
         </div>
       </section>
 
-      {/* ===== 2.5 ✅ BRAND FILTER BAR (naya) ===== */}
+      {/* ===== 2.5 BRAND FILTER BAR ===== */}
       {availableBrands.length > 0 && (
         <div className="mx-auto max-w-6xl px-4 pt-6">
           <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-gray-200 bg-white p-3 dark:border-[#1E3A52] dark:bg-[#112240]">
@@ -509,7 +455,7 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
         </div>
       )}
 
-      {/* ===== 3. NEW ARRIVALS ===== */}
+      {/* ===== 3. NEW ARRIVALS — ✅ ProductCard direct (Link wrapper NAHI) ===== */}
       {newArrivals.length > 0 && (
         <section className="mx-auto max-w-6xl px-4 py-8">
           <SectionHead tag="Latest" title="New Arrivals" showArrows
@@ -517,15 +463,15 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
           <div ref={arrivalsRef}
             className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {newArrivals.map((p) => (
-              <div key={p.id} className="w-44 shrink-0 snap-start sm:w-52">
-                <Link href={`/product/${p.id}`}><ProductCard p={p} /></Link>
+              <div key={p.id} className="w-48 shrink-0 snap-start sm:w-56">
+                <ProductCard p={p} />
               </div>
             ))}
           </div>
         </section>
       )}
 
-      {/* ===== 4. FEATURED SLIDER ===== */}
+      {/* ===== 4. FEATURED SLIDER — ✅ direct ===== */}
       {featured.length > 0 && (
         <section className="bg-white py-8 dark:bg-[#0D1F30]/60">
           <div className="mx-auto max-w-6xl px-4">
@@ -534,8 +480,8 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
             <div ref={featuredRef}
               className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {featured.map((p) => (
-                <div key={p.id} className="w-44 shrink-0 snap-start sm:w-52">
-                  <Link href={`/product/${p.id}`}><ProductCard p={p} /></Link>
+                <div key={p.id} className="w-48 shrink-0 snap-start sm:w-56">
+                  <ProductCard p={p} />
                 </div>
               ))}
             </div>
@@ -543,13 +489,12 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
         </section>
       )}
 
-      {/* ===== 5. ALL PRODUCTS GRID ===== */}
+      {/* ===== 5. ALL PRODUCTS GRID — ✅ direct, key card pe ===== */}
       <section id="products" className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-5 flex items-end justify-between">
           <div>
             <h2 className="text-xl font-black text-slate-900 sm:text-2xl dark:text-white">
               {activeCat?.name || "All Products"}
-              {/* ✅ Brand filter active hone pe title me */}
               {brandFilter && <span className="text-[#F5A623]"> — {brandFilter}</span>}
             </h2>
             <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -572,7 +517,7 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {filtered.map((p) => (
-              <Link key={p.id} href={`/product/${p.id}`}><ProductCard p={p} /></Link>
+              <ProductCard key={p.id} p={p} />
             ))}
           </div>
         )}

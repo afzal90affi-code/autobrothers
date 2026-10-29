@@ -1,7 +1,8 @@
 /* IndexNow submit helper */
 
 const KEY = process.env.INDEXNOW_KEY || "";
-const SITE = process.env.NEXT_PUBLIC_SITE_URL || "";
+// FIX 1: trailing slash auto-hatao (warna host galat banta hai)
+const SITE = (process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "");
 
 export async function submitToIndexNow(urls: string[]) {
   if (!KEY || !SITE || urls.length === 0) {
@@ -16,7 +17,11 @@ export async function submitToIndexNow(urls: string[]) {
         host: SITE.replace(/^https?:\/\//, ""),
         key: KEY,
         keyLocation: `${SITE}/${KEY}.txt`,
-        urlList: urls.map((u) => (u.startsWith("http") ? u : `${SITE}${u}`)),
+        // FIX 2: non-www URLs ko www pe force karo
+        urlList: urls.map((u) => {
+          const full = u.startsWith("http") ? u : `${SITE}${u}`;
+          return full.replace("//autobrothers.pk", "//www.autobrothers.pk");
+        }),
       }),
     });
     return { ok: res.ok || res.status === 202, status: res.status };

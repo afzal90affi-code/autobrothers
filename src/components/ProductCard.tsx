@@ -4,7 +4,11 @@ import Link from "next/link";
 import { useCart } from "../context/CartContext";
 
 export default function ProductCard({ product }: { product: any }) {
-  const img = product.img ? `${product.img}?w=800&auto=format&q=70` : null;
+  // ✅ WATERMARK: image seedha nahi — watermark API route se guzar kar aati hai
+  //    (server par "autobrothers.pk" bake hota hai — save karo to bhi sath)
+  const img = product.img
+    ? `/api/watermark?src=${encodeURIComponent(product.img)}&w=800&q=70`
+    : null;
   const { addToCart } = useCart();
 
   /* CONDITION SCORE */

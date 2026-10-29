@@ -8,6 +8,14 @@ export const revalidate = 60;
 const BASE_URL = "https://autobrothers.pk";
 const POSTS_PER_PAGE = 9;
 
+/* ============================================================
+   ✅ WATERMARK HELPER — blog images /api/watermark route se
+   Route tested hai (product page). Fail-safe: agar koi image
+   process na ho saki to original dikhegi.
+============================================================ */
+const wm = (url: string, w: number, q = 80) =>
+  `/api/watermark?src=${encodeURIComponent(url)}&w=${w}&q=${q}`;
+
 const readExpr = Array.from({ length: 10 }, (_, i) => `coalesce(length(content${i + 1}), 0)`).join(" + ");
 
 type Cat = { _id: string; title: string; slug: string };
@@ -219,7 +227,7 @@ export default async function BlogPage({
               <div className="relative h-56 sm:h-96 md:h-[26rem]">
                 {featured.cover ? (
                   <img
-                    src={`${featured.cover}?w=1400&auto=format&q=80`}
+                    src={wm(featured.cover, 1400, 80)}
                     alt={featured.title}
                     className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                   />

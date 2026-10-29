@@ -21,6 +21,11 @@ type Cat = { _id: string; title: string; slug: string; img?: string };
 const WHATSAPP_NUMBER = "92322806245".replace("806245", "806245"); // 923222806245
 const WA_NUMBER = "923222806245"; // ✅ apna number
 
+/* ✅ WATERMARK helper — har external image (Sanity/ImgBB) is route se guzar kar
+   aati hai, server par "autobrothers.pk" bake hota hai (save karo to bhi sath) */
+const wmSrc = (url: string, w: number, q: number) =>
+  `/api/watermark?src=${encodeURIComponent(url)}&w=${w}&q=${q}`;
+
 const fmtDate = (d: string) =>
   d ? new Date(d).toLocaleDateString("en-PK", { day: "numeric", month: "short", year: "numeric" }) : "";
 
@@ -78,6 +83,7 @@ function Skeleton({ n = 4, h = "h-52" }: { n?: number; h?: string }) {
    - img hamesha render hota hai (conditional <div> swap nahi)
    - wa.me me number
    - Score badge + used trust chips
+   - ✅ WATERMARK: image ab /api/watermark route se guzarti hai
 ============================================================ */
 
 function ProductCard({ p }: { p: Prod }) {
@@ -92,7 +98,7 @@ function ProductCard({ p }: { p: Prod }) {
 
       {/* ✅ img HAMESHA render — hydration safe (src khali toh invisible) */}
       <img
-        src={p.image ?? ""}
+        src={p.image ? wmSrc(p.image, 800, 70) : ""}
         alt={imgAlt}
         loading="lazy"
         width={800}
@@ -327,9 +333,9 @@ function NewsSection() {
             <Link key={p._id} href={`/blog/${p.slug}`}>
               <div className="group h-full overflow-hidden rounded-2xl bg-white shadow-md shadow-gray-200/60 ring-1 ring-gray-100 transition-all duration-500 hover:-translate-y-1.5 hover:shadow-xl dark:bg-[#112240] dark:shadow-black/20 dark:ring-[#1E3A52] dark:hover:shadow-black/40">
                 <div className="overflow-hidden">
-                  {/* ✅ img hamesha — hydration safe */}
+                  {/* ✅ img hamesha — hydration safe | ✅ WATERMARK route se */}
                   <img
-                    src={p.image ? `${p.image}?w=600&auto=format&q=70` : ""}
+                    src={p.image ? wmSrc(p.image, 600, 70) : ""}
                     alt={`${p.title} — AutoBrothers car care blog`}
                     loading="lazy"
                     width={600}
@@ -431,7 +437,7 @@ function CategoriesSection() {
             className="group relative aspect-[4/3] overflow-hidden rounded-2xl shadow-md ring-1 ring-gray-200 transition-all duration-500 hover:-translate-y-1.5 hover:shadow-2xl hover:ring-[#F5A623]/50 dark:ring-[#1E3A52]">
 
             {c.img ? (
-              <img src={`${c.img}?w=600&auto=format&q=70`} alt={`Used ${c.title} auto parts — AutoBrothers Pakistan`} loading="lazy"
+              <img src={wmSrc(c.img, 600, 70)} alt={`Used ${c.title} auto parts — AutoBrothers Pakistan`} loading="lazy"
                 className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" />
             ) : (
               <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#13293D] to-[#0A1929]">

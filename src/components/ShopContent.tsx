@@ -43,6 +43,14 @@ const IG_PROFILE_IMG = "https://i.ibb.co/84814xg5/b16b-5542697ff3a9c-1296x.webp"
 const WHATSAPP_NUMBER = "923222806245";
 
 /* ============================================================
+   ✅ WATERMARK HELPER — har image /api/watermark route se jayegi
+   Route pehle se tested hai (product page kaam kar raha hai).
+   Fail-safe: agar koi image process na ho saki to original dikhegi.
+============================================================ */
+const wm = (url: string, w: number, q = 70) =>
+  `/api/watermark?src=${encodeURIComponent(url)}&w=${w}&q=${q}`;
+
+/* ============================================================
    ✅ PRODUCT CARD — NO NESTED LINKS
    Image apne Link me, details bahar, View Product alag Link
    — koi <a> ke andar <a> nahi = hydration safe
@@ -54,6 +62,9 @@ function ProductCard({ p }: { p: Prod }) {
 
   const imgAlt = `${p.title}${p.condition ? ` — ${p.condition} condition` : ""} used auto part${p.model ? `, fits ${p.model}` : ""} — AutoBrothers Pakistan`;
 
+  /* ✅ WATERMARK — ab image seedha nahi, watermark route se jayegi */
+  const imgSrc = p.image ? wm(p.image, 600, 70) : null;
+
   return (
     <div
       className="group flex h-full flex-col overflow-hidden rounded-lg bg-white dark:bg-[#112240] border border-gray-200/80 dark:border-[#1E3A52] transition-all duration-300 hover:shadow-md dark:hover:shadow-black/40"
@@ -63,9 +74,9 @@ function ProductCard({ p }: { p: Prod }) {
       {/* IMAGE — apna Link (nested nahi) */}
       <Link href={`/product/${p.id}`} title={p.title}>
         <div className="relative aspect-square overflow-hidden bg-white dark:bg-[#0D1F30]">
-          {p.image ? (
+          {imgSrc ? (
             <img
-              src={p.image}
+              src={imgSrc}
               alt={imgAlt}
               loading="lazy"
               width={600}
@@ -269,6 +280,7 @@ function SocialPages() {
 /* ============================================================
    SHOP CONTENT
    ✅ KOI BAHAR WALA <Link> PRODUCT CARD PE NAHI — hydration safe
+   ✅ SAB PRODUCT IMAGES WATERMARK ROUTE SE — autobrothers.pk
 ============================================================ */
 export default function ShopContent({ prods, cats, initialCat = "", initialQ = "" }: Props) {
   const [active, setActive] = useState(initialCat);
@@ -370,7 +382,7 @@ export default function ShopContent({ prods, cats, initialCat = "", initialQ = "
       {/* ===== 2. HERO BANNER ===== */}
       <section className="relative overflow-hidden">
         {activeCat?.image && (
-          <img src={activeCat.image} alt={`${activeCat.name} used auto parts — AutoBrothers Pakistan`}
+          <img src={wm(activeCat.image, 1200, 70)} alt={`${activeCat.name} used auto parts — AutoBrothers Pakistan`}
             className="absolute inset-0 h-full w-full object-cover" />
         )}
         <div className={`absolute inset-0 ${

@@ -5,12 +5,17 @@ export default function ProductGallery({ images, title }: { images: { url: strin
   const [active, setActive] = useState(0);
   if (!images?.length) return null;
 
+  // ✅ Image ko watermark API route se guzaro — server par
+  //    "autobrothers.pk" bake ho kar aata hai (save image pe bhi sath)
+  const wmSrc = (url: string, w: number, q: number) =>
+    `/api/watermark?src=${encodeURIComponent(url)}&w=${w}&q=${q}`;
+
   return (
     <div>
       {/* Main image */}
       <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800">
         <img
-          src={`${images[active].url}?w=900&auto=format&q=80`}
+          src={wmSrc(images[active].url, 900, 80)}
           alt={images[active].alt || title}
           className="w-full h-full object-cover"
         />
@@ -36,7 +41,7 @@ export default function ProductGallery({ images, title }: { images: { url: strin
               className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition ${
                 i === active ? "border-[#F5A623]" : "border-transparent opacity-60 hover:opacity-100"
               }`}>
-              <img src={`${im.url}?w=150&auto=format&q=70`} alt={im.alt || `${title} ${i + 1}`} className="w-full h-full object-cover" />
+              <img src={wmSrc(im.url, 150, 70)} alt={im.alt || `${title} ${i + 1}`} className="w-full h-full object-cover" />
             </button>
           ))}
         </div>

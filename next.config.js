@@ -8,6 +8,9 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
+    // Vercel Image Optimization quota bachane ke liye optimizer OFF
+    // (products pehle se /api/watermark route se sharp-resized aa rahi hain)
+    unoptimized: true,
     remotePatterns: [
       { protocol: 'https', hostname: 'cdn.sanity.io' },
       { protocol: 'https', hostname: 'picsum.photos' },
@@ -22,6 +25,9 @@ const nextConfig = {
       { source: '/contact%20us', destination: '/contact-us', permanent: true },
       { source: '/privacy policy', destination: '/privacy-policy', permanent: true },
       { source: '/privacy%20policy', destination: '/privacy-policy', permanent: true },
+      // Disclaimer page
+      { source: '/disclaimer policy', destination: '/disclaimer', permanent: true },
+      { source: '/disclaimer%20policy', destination: '/disclaimer', permanent: true },
     ];
   },
 }

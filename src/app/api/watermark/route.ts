@@ -87,7 +87,10 @@ export async function GET(req: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": "image/webp",
-        "Cache-Control": "public, max-age=31536000, immutable",
+        // max-age → browser cache | s-maxage → Vercel edge cache
+        // (repeat requests function ko chalaye baghair CDN se serve hongi)
+        "Cache-Control":
+          "public, max-age=31536000, s-maxage=31536000, immutable",
       },
     });
   } catch {

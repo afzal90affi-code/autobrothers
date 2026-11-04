@@ -1,3 +1,19 @@
-User-agent: *
+User-Agent: *
 Allow: /
-Sitemap: https://autobrothers.pk/sitemap.xml
+Disallow: /admin
+Disallow: /api
+Disallow: /cart
+
+User-Agent: GPTBot
+Allow: /
+
+User-Agent: ChatGPT-User
+Allow: /
+
+User-Agent: PerplexityBot
+Allow: /
+
+User-Agent: Google-Extended
+Allow: /
+
+Sitemap: https://www.autobrothers.pk/sitemap.xml

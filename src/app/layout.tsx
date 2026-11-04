@@ -7,6 +7,9 @@ import { CartProvider } from "../context/CartContext";
 import { ThemeProvider } from "../context/ThemeContext";
 
 export const metadata: Metadata = {
+  /* ✅ metadataBase — OG images + relative canonical URLs inhe use kar ke
+     resolve hoti hain. www wala canonical domain set kiya (non-www 307 redirect karta hai) */
+  metadataBase: new URL("https://www.autobrothers.pk"),
   title: "AutoBrothers.pk — Car Accessories & Auto Blog",
   description: "Premium car accessories shop + expert car care blog. All Pakistan delivery.",
 };

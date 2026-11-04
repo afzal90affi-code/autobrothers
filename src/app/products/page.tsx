@@ -1,13 +1,12 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { Search, MessageCircle, ArrowRight, ShoppingCart, ChevronRight, X } from "lucide-react";
 import { useCart } from "../../context/CartContext";
 
 const WA = "923222806245";
-const SITE_URL = "https://autobrothers.pk";
+const SITE_URL = "https://www.autobrothers.pk";
 
 const waLink = (name: string, price?: string, url?: string) => {
   const text = `Salam! AutoBrothers mein "${name}"${price ? ` (${price})` : ""} ki detail chahiye.\n\n🔗 Link: ${url || ""}`;
@@ -21,11 +20,10 @@ const condBadge = (c: string) => {
 };
 
 /* ============================================================
-   MAIN CONTENT (Suspense ke andar — useSearchParams ki wajah se)
+   MAIN CONTENT — ab SSR-safe (Suspense/useSearchParams hata diye)
    ============================================================ */
 function ProductsContent() {
   const { addToCart } = useCart();
-  const searchParams = useSearchParams();
 
   const [cats, setCats] = useState<any[]>([]);
   const [prods, setProds] = useState<any[]>([]);
@@ -62,10 +60,13 @@ function ProductsContent() {
   }, []);
 
   /* ---------- ✅ URL params sync — navbar/search ke links ab kaam karenge ---------- */
+  // useSearchParams ki jagah window.location.search — wahi kaam, lekin ab
+  // Suspense boundary ki zaroorat nahi aur H1 server HTML me render hota hai
   useEffect(() => {
     if (initialized || loading) return;
-    const urlCat = searchParams.get("cat");
-    const urlQ = searchParams.get("q");
+    const params = new URLSearchParams(window.location.search);
+    const urlCat = params.get("cat");
+    const urlQ = params.get("q");
 
     if (urlQ) setSearchQ(urlQ);
 
@@ -76,7 +77,7 @@ function ProductsContent() {
       if (isMainCat || isSubCat) setFilterCat(urlCat);
     }
     setInitialized(true);
-  }, [searchParams, cats, prods, loading, initialized]);
+  }, [cats, prods, loading, initialized]);
 
   /* ---------- ✅ Chips: main categories + subcategories dono ---------- */
   // Jo categories/products mein actually use ho rahi hain
@@ -441,18 +442,12 @@ function ProductsContent() {
 }
 
 /* ============================================================
-   ✅ Suspense wrapper — useSearchParams build requirement
+   ✅ SSR-SAFE EXPORT — Suspense wrapper hata diya.
+   Pehle: useSearchParams ki wajah se Next.js build ke waqt static
+   HTML me sirf spinner (fallback) bhejta tha — H1, hero, sab kuch
+   client-side par render hota tha. Bing raw HTML parhta hai is liye
+   usay H1 nazar nahi aata tha ("H1 missing" on /products).
+   Ab: poora page (H1 samet) server HTML me render hota hai.
+   URL sync wahi kaam karta hai — window.location.search se.
    ============================================================ */
-export default function ProductsPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-white dark:bg-[#0A1929] flex items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#F5A623] border-t-transparent" />
-        </div>
-      }
-    >
-      <ProductsContent />
-    </Suspense>
-  );
-}
+export default ProductsContent;

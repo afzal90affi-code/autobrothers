@@ -7,18 +7,31 @@ import SplashScreen from "./animations/splashscreen";
 import VehicleSelector from "./VehicleSelector";
 import { Car, ChevronRight } from "lucide-react";
 
-type Post = { _id: string; title: string; slug: string; image?: string; date: string; desc?: string; excerpt?: string };
+/* ============================================================
+   TYPES
+============================================================ */
 type Prod = {
-  _id: string; title: string; slug: string; price: string;
-  oldPrice?: string; image?: string; condition?: string; conditionScore?: number;
-  mileage?: string; warranty?: number; qualityChecked?: boolean; japanImported?: boolean;
-  model?: string; category?: string; subCat?: string; newArrival?: boolean;
+  _id: string; title: string; slug: string;
+  price?: string | number; oldPrice?: string | number;
+  image?: string; condition?: string; conditionScore?: number;
+  mileage?: string; warranty?: number; qualityChecked?: boolean;
+  japanImported?: boolean; model?: string; newArrival?: boolean;
+  category?: string; catSlug?: string; subCategory?: string; subSlug?: string;
 };
 type Cat = { _id: string; title: string; slug: string; img?: string };
+type SubDoc = {
+  _id: string; title: string; slug?: string; img?: string;
+  parentId?: string; parentTitle?: string; parentSlug?: string;
+};
+type SubNode = { key: string; name: string; slug: string; img?: string; count: number };
+type ParentNode = {
+  key: string; name: string; slug: string; img?: string; _id?: string;
+  synthetic?: boolean; subs: SubNode[]; prods: Prod[];
+};
 
-/* ---------- helpers ---------- */
-
-const WHATSAPP_NUMBER = "92322806245".replace("806245", "806245"); // 923222806245
+/* ============================================================
+   HELPERS
+============================================================ */
 const WA_NUMBER = "923222806245"; // ✅ apna number
 
 /* ✅ WATERMARK helper — har external image (Sanity/ImgBB) is route se guzar kar
@@ -29,11 +42,14 @@ const wmSrc = (url: string, w: number, q: number) =>
 const fmtDate = (d: string) =>
   d ? new Date(d).toLocaleDateString("en-PK", { day: "numeric", month: "short", year: "numeric" }) : "";
 
-const conditionStyle: Record<string, string> = {
-  Good: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400",
-  Average: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
-  Bad: "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400",
-};
+const norm = (s?: string) => (s || "").toLowerCase().replace(/\s+/g, " ").trim();
+const slugify = (s?: string) =>
+  norm(s).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+const titleCase = (s?: string) =>
+  (s || "").replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+
+const JUNK = ["test", "delete", "demo", "sample", "dummy", "asdf", "check", "us news"];
+const isJunk = (t: string) => JUNK.some((j) => t.includes(j));
 
 /* ✅ Condition → Score (ProductCard jaisa hi) */
 const scoreMap: Record<string, number> = { Good: 8, Average: 6, Bad: 3 };
@@ -42,6 +58,172 @@ const getScore = (p: any): number =>
     ? p.conditionScore
     : (scoreMap[p?.condition] ?? 0);
 
+/* ============================================================
+   ✅ CATEGORY TREE BUILDER — main categories + sub-categories
+   3 sources mil kar tree banate hain:
+   1) Sanity "category" docs (main)
+   2) Sanity "subcategory" docs (parentCategory link ke sath)
+   3) Products khud (category + subCategory fields se) — agar Sanity
+      se kuch na mile to bhi har sub-category tree me aayegi
+============================================================ */
+function buildTree(cats: Cat[], subDocs: SubDoc[], prods: Prod[]): ParentNode[] {
+  const parents = new Map<string, ParentNode>();
+
+  const ensureParent = (
+    name: string, slug: string, img?: string, _id?: string, synthetic?: boolean
+  ): ParentNode => {
+    const key = norm(name) || norm(slug);
+    const existing = key ? parents.get(key) : undefined;
+    if (existing) {
+      if (!existing.img && img) existing.img = img;
+      if (!existing._id && _id) existing._id = _id;
+      return existing;
+    }
+    const node: ParentNode = {
+      key: key || slugify(slug || name || "cat"),
+      name: (name || slug || "Category").trim(),
+      slug: (slug || slugify(name || "category")).trim(),
+      img, _id, synthetic,
+      subs: [], prods: [],
+    };
+    parents.set(node.key, node);
+    return node;
+  };
+
+  /* fuzzy — slug/name dono se parent dhundo */
+  const findParent = (slug?: string, name?: string): ParentNode | undefined => {
+    const s = norm(slug); const n = norm(name);
+    if (!s && !n) return undefined;
+    for (const v of Array.from(parents.values())) {
+      const vs = norm(v.slug); const vn = norm(v.name);
+      if (s && (vs === s || vn === s)) return v;
+      if (n && (vn === n || vs === n)) return v;
+      if (s && vs.length >= 4 && s.length >= 4 && (vs.includes(s) || s.includes(vs))) return v;
+      if (n && vn.length >= 4 && n.length >= 4 && (vn.includes(n) || n.includes(vn))) return v;
+    }
+    return undefined;
+  };
+
+  /* ---- Step 0: Sanity cats classify — kaun parent, kaun kisi aur ki sub ---- */
+  const goodCats = (cats || []).filter(
+    (c) => c?.title && !isJunk((c.title || "").toLowerCase())
+  );
+  const subCats: { c: Cat; parentSlug?: string; parentTitle?: string }[] = [];
+
+  goodCats.forEach((c) => {
+    const t = norm(c.title);
+    let subOf: { parentSlug?: string; parentTitle?: string } | null = null;
+    for (const p of prods || []) {
+      const s = norm(p.subCategory);
+      if (!s) continue;
+      const same = s === t || (t.length >= 4 && s.includes(t)) || (s.length >= 4 && t.includes(s));
+      if (!same) continue;
+      /* ye product jis parent ka hai wo is cat khud nahi honi chahiye */
+      const pCat = norm(p.category);
+      const selfCat =
+        pCat && (pCat === t || norm(p.catSlug) === norm(c.slug) || pCat.includes(t) || t.includes(pCat));
+      if (!selfCat) { subOf = { parentSlug: p.catSlug, parentTitle: p.category }; break; }
+    }
+    if (subOf) subCats.push({ c, parentSlug: subOf.parentSlug, parentTitle: subOf.parentTitle });
+    else ensureParent(c.title, c.slug || slugify(c.title), c.img, c._id);
+  });
+
+  /* ---- Step 1: Sanity subcategory docs — parent ke sath attach ---- */
+  (subDocs || []).forEach((sd) => {
+    if (!sd?.title) return;
+    let parent =
+      (sd.parentId && Array.from(parents.values()).find((v) => v._id && v._id === sd.parentId)) ||
+      findParent(sd.parentSlug, sd.parentTitle);
+    if (!parent) {
+      parent = ensureParent(
+        sd.parentTitle || sd.parentSlug || "Other Parts",
+        sd.parentSlug || slugify(sd.parentTitle || "other-parts"),
+        undefined, undefined, true
+      );
+    }
+    const sKey = norm(sd.title);
+    let sub = parent.subs.find((x) => x.key === sKey);
+    if (!sub) {
+      sub = { key: sKey, name: sd.title, slug: sd.slug || slugify(sd.title), img: sd.img, count: 0 };
+      parent.subs.push(sub);
+    } else if (!sub.img && sd.img) {
+      sub.img = sd.img;
+    }
+  });
+
+  /* ---- Step 2: Sanity cats jo actually sub nikli ---- */
+  subCats.forEach(({ c, parentSlug, parentTitle }) => {
+    const parent =
+      findParent(parentSlug, parentTitle) ||
+      ensureParent(parentTitle || "Other Parts", slugify(parentTitle || "other-parts"), undefined, undefined, true);
+    const sKey = norm(c.title);
+    if (!parent.subs.find((x) => x.key === sKey)) {
+      parent.subs.push({ key: sKey, name: c.title, slug: c.slug || slugify(c.title), img: c.img, count: 0 });
+    }
+  });
+
+  /* ---- Step 3: products — parent group + sub counts ----
+     (Sanity subcategory docs na mile to bhi products se poora tree ban jata hai) */
+  (prods || []).forEach((p) => {
+    const pName = (p.category || "").trim();
+    const pSlug = (p.catSlug || "").trim();
+    if (!norm(pName) && !norm(pSlug)) return;
+    let parent = findParent(pSlug, pName);
+    if (!parent) parent = ensureParent(pName || pSlug, pSlug || slugify(pName), undefined, undefined, true);
+    parent.prods.push(p);
+    const sName = (p.subCategory || "").trim();
+    if (!sName) return;
+    const sKey = norm(sName);
+    let sub = parent.subs.find((x) => x.key === sKey);
+    if (!sub) {
+      sub = {
+        key: sKey,
+        name: titleCase(sName),
+        slug: p.subSlug || slugify(`${parent.slug}-${sName}`),
+        count: 0,
+      };
+      parent.subs.push(sub);
+    }
+    sub.count++;
+    if (!sub.img && p.image) sub.img = p.image;
+  });
+
+  /* finalize */
+  const arr = Array.from(parents.values());
+  arr.forEach((v) => {
+    if (!v.img && v.prods.length && v.prods[0].image) v.img = v.prods[0].image;
+    v.subs.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  });
+  const real = arr.filter((v) => !v.synthetic);
+  const syn = arr.filter((v) => v.synthetic).sort((a, b) => b.prods.length - a.prods.length);
+  return [...real, ...syn];
+}
+
+/* ============================================================
+   GROQ — product fields (shared)
+============================================================ */
+const PRODUCT_FIELDS = `
+  _id, title, "slug": slug.current, price, oldPrice, condition, conditionScore,
+  mileage, warranty, qualityChecked, japanImported, model, newArrival,
+  "image": images[0].asset->url,
+  "subCategory": subcategory->title,
+  "subSlug": subcategory->slug.current,
+  "category": subcategory->parentCategory->title,
+  "catSlug": subcategory->parentCategory->slug.current
+`;
+
+const CATS_QUERY = `*[_type == "category"] | order(coalesce(order, 9999) asc, title asc) {
+  _id, title, "slug": slug.current, "img": image.asset->url
+}`;
+
+const SUBS_QUERY = `*[_type == "subcategory"] | order(title asc) {
+  _id, title, "slug": slug.current, "img": image.asset->url,
+  "parentId": parentCategory->_id,
+  "parentTitle": parentCategory->title,
+  "parentSlug": parentCategory->slug.current
+}`;
+
+/* ---------- Section Head ---------- */
 function SectionHead({ emoji, title, sub, href }: { emoji?: string; title: string; sub?: string; href?: string }) {
   return (
     <div className="mb-6 flex items-end justify-between gap-3">
@@ -81,11 +263,10 @@ function Skeleton({ n = 4, h = "h-52" }: { n?: number; h?: string }) {
 /* ============================================================
    ✅ HYDRATION-SAFE PRODUCT CARD
    - img hamesha render hota hai (conditional <div> swap nahi)
-   - wa.me me number
+   - wa.me me sahi number
    - Score badge + used trust chips
-   - ✅ WATERMARK: image ab /api/watermark route se guzarti hai
+   - ✅ WATERMARK: image /api/watermark route se
 ============================================================ */
-
 function ProductCard({ p }: { p: Prod }) {
   const score = getScore(p);
   const scoreColor =
@@ -173,7 +354,7 @@ function ProductCard({ p }: { p: Prod }) {
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                /* ✅ NUMBER added — ab seedha tumhari chat khulegi */
+                /* ✅ NUMBER — seedha WhatsApp chat */
                 window.open(`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(`Hi! I'm interested in: ${p.title} — Rs ${p.price}`)}`, "_blank");
               }}
               aria-label={`Order ${p.title} on WhatsApp`}
@@ -201,7 +382,6 @@ function ProductCard({ p }: { p: Prod }) {
 /* ============================================================
    1. HERO
 ============================================================ */
-
 function Hero() {
   const [s, setS] = useState<{ heroImage?: string; heroTitle?: string; heroSub?: string }>({});
 
@@ -243,7 +423,7 @@ function Hero() {
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" />
               </svg>
-              Pakistan's Trusted Auto Store
+              Pakistan&apos;s Trusted Auto Store
             </span>
 
             <h1 className="mt-4 max-w-3xl text-2xl font-black leading-[1.1] text-white drop-shadow-lg sm:text-4xl md:text-5xl">
@@ -273,7 +453,7 @@ function Hero() {
               </a>
               <Link href="/blog"
                 className="inline-flex items-center gap-2 rounded-xl border-2 border-white/40 bg-white/10 px-7 py-3.5 text-sm font-bold text-white backdrop-blur transition-all hover:scale-105 hover:bg-white/20 sm:text-base">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M19 5v14a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2zm-11 4h8m-8 4h8m-8 4h5" />
                 </svg>
                 Read Blog
@@ -310,6 +490,7 @@ function Hero() {
 /* ============================================================
    2. NEWS
 ============================================================ */
+type Post = { _id: string; title: string; slug: string; image?: string; date: string; desc?: string };
 
 function NewsSection() {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -358,21 +539,8 @@ function NewsSection() {
 }
 
 /* ============================================================
-   ✅ PRODUCT FIELDS — used-product data ke saath (shared)
-============================================================ */
-
-const PRODUCT_FIELDS = `
-  _id, title, "slug": slug.current, price, oldPrice, condition, conditionScore,
-  mileage, warranty, qualityChecked, japanImported, model, newArrival,
-  "image": images[0].asset->url,
-  "subCat": subcategory->title,
-  "category": subcategory->parentCategory->title
-`;
-
-/* ============================================================
    3. NEW ARRIVALS
 ============================================================ */
-
 function NewArrivals() {
   const [prods, setProds] = useState<Prod[]>([]);
 
@@ -406,18 +574,13 @@ function NewArrivals() {
 }
 
 /* ============================================================
-   4. CATEGORIES
+   4. CATEGORIES — main category cards
 ============================================================ */
-
 function CategoriesSection() {
   const [cats, setCats] = useState<Cat[]>([]);
 
   useEffect(() => {
-    client.fetch<Cat[]>(
-      `*[_type == "category"] | order(coalesce(order, 9999) asc, title asc) {
-        _id, title, "slug": slug.current, "img": image.asset->url
-      }`
-    ).then(setCats).catch(() => {});
+    client.fetch<Cat[]>(CATS_QUERY).then(setCats).catch(() => {});
   }, []);
 
   if (cats.length === 0) return null;
@@ -432,7 +595,7 @@ function CategoriesSection() {
       />
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-        {cats.map((c) => (
+        {cats.filter((c) => !isJunk((c.title || "").toLowerCase())).map((c) => (
           <Link key={c._id} href={`/shop?cat=${c.slug}`}
             className="group relative aspect-[4/3] overflow-hidden rounded-2xl shadow-md ring-1 ring-gray-200 transition-all duration-500 hover:-translate-y-1.5 hover:shadow-2xl hover:ring-[#F5A623]/50 dark:ring-[#1E3A52]">
 
@@ -470,7 +633,6 @@ function CategoriesSection() {
 /* ============================================================
    4.5. VEHICLE SELECTOR
 ============================================================ */
-
 function VehicleSection() {
   const [open, setOpen] = useState(false);
 
@@ -502,84 +664,168 @@ function VehicleSection() {
 }
 
 /* ============================================================
-   5. CATEGORY SHOP
+   5. CATEGORY PRODUCT ROWS ✅ v3 — SUB-CATEGORIES KE SATH
+   - Har main category row ke sath uski sub-category chips
+     (chips pe click → shop me wahi sub-category khulti hai)
+   - 4 categories pehle, baqi "View More Categories" pe
+   - Har row me 4 products
 ============================================================ */
+const MAX_CATEGORY_ROWS = 4;   /* pehle kitni categories nazar aayen */
+const PRODUCTS_PER_ROW = 4;    /* har category row me kitne products */
 
-function CategoryShop() {
-  const [cats, setCats] = useState<Cat[]>([]);
-  const [active, setActive] = useState("all");
-  const [prods, setProds] = useState<Prod[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    client.fetch<Cat[]>(
-      `*[_type == "category"] | order(title asc) { _id, title, "slug": slug.current }`
-    ).then(setCats).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    setLoading(true);
-    const query = active === "all"
-      ? `*[_type == "product"] | order(_createdAt desc) [0...12] { ${PRODUCT_FIELDS} }`
-      : `*[_type == "product" && subcategory->parentCategory._id == $catId] | order(_createdAt desc) [0...12] { ${PRODUCT_FIELDS} }`;
-
-    client.fetch<Prod[]>(query, { catId: active })
-      .then(setProds)
-      .catch(() => setProds([]))
-      .finally(() => setLoading(false));
-  }, [active]);
-
-  const activeCat = cats.find((c) => c._id === active);
-
-  const pill = (id: string, label: string) => (
-    <button key={id} onClick={() => setActive(id)}
-      className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition sm:text-sm ${
-        active === id
-          ? "bg-[#F5A623] text-white shadow-lg shadow-[#F5A623]/25"
-          : "bg-white text-gray-600 ring-1 ring-gray-200 hover:text-slate-900 dark:bg-[#112240] dark:text-gray-400 dark:ring-[#1E3A52] dark:hover:text-white dark:hover:ring-[#F5A623]/50"
-      }`}>
-      {label}
-    </button>
-  );
+function CategoryRow({ parent, alt }: { parent: ParentNode; alt?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const scrollDir = (dir: 1 | -1) => ref.current?.scrollBy({ left: dir * 280, behavior: "smooth" });
+  const rowProds = parent.prods.slice(0, PRODUCTS_PER_ROW);
+  const rowSubs = parent.subs.filter((s) => s.count > 0);
 
   return (
-    <section>
-      <div className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 backdrop-blur dark:border-[#1E3A52] dark:bg-[#0A1929]/95">
-        <div className="mx-auto flex max-w-6xl items-center gap-2 overflow-x-auto px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {pill("all", "All")}
-          {cats.map((c) => pill(c._id, c.title))}
+    <section className={`py-10 ${alt ? "bg-gray-50 dark:bg-[#0D1F30]/60" : ""}`}>
+      <div className="mx-auto max-w-6xl px-4">
+        <div className="flex items-end justify-between gap-3">
+          <SectionHead
+            emoji="📂"
+            title={parent.name}
+            sub={`${parent.prods.length} products`}
+            href={`/shop?cat=${parent.slug}`}
+          />
+          <div className="hidden shrink-0 gap-2 pb-1 sm:flex">
+            <button onClick={() => scrollDir(-1)} aria-label="Previous"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white ring-1 ring-gray-200 shadow-sm transition hover:bg-amber-50 hover:text-[#F5A623] dark:bg-[#112240] dark:ring-[#1E3A52] dark:hover:bg-[#F5A623]/20 dark:hover:text-[#F5A623]">◀</button>
+            <button onClick={() => scrollDir(1)} aria-label="Next"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white ring-1 ring-gray-200 shadow-sm transition hover:bg-amber-50 hover:text-[#F5A623] dark:bg-[#112240] dark:ring-[#1E3A52] dark:hover:bg-[#F5A623]/20 dark:hover:text-[#F5A623]">▶</button>
+          </div>
         </div>
-      </div>
 
-      <div className="mx-auto max-w-6xl px-4 py-10">
-        <SectionHead
-          title={active === "all" ? "All Products" : activeCat?.title || "Products"}
-          sub={`${prods.length} products`}
-          href="/shop"
-        />
-
-        {loading ? (
-          <Skeleton n={4} />
-        ) : prods.length === 0 ? (
-          <Empty text="Is category mein abhi products nahi hain." />
-        ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {prods.map((p) => (
-              <Link key={p._id} href={`/product/${p.slug}`}>
-                <ProductCard p={p} />
+        {/* ✅ SUB-CATEGORY CHIPS — click → shop me wahi sub khulti hai */}
+        {rowSubs.length > 0 && (
+          <div className="mb-4 flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <span className="shrink-0 text-[10px] font-black uppercase tracking-wider text-gray-400 dark:text-gray-500">
+              Sub:
+            </span>
+            {rowSubs.map((s) => (
+              <Link key={s.key} href={`/shop?cat=${s.slug}`}
+                className="flex shrink-0 items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1.5 text-[11px] font-bold text-gray-700 transition hover:bg-[#F5A623] hover:text-white dark:bg-[#13293D] dark:text-gray-300 dark:hover:bg-[#F5A623] dark:hover:text-[#0A1929]"
+                title={`${s.name} — ${s.count} products`}>
+                {s.name}
+                <span className="rounded-full bg-white px-1.5 text-[9px] font-black text-gray-500 dark:bg-[#0A1929]/60 dark:text-gray-400">
+                  {s.count}
+                </span>
               </Link>
             ))}
           </div>
         )}
+
+        <div ref={ref}
+          className="grid grid-cols-2 gap-4 sm:flex sm:snap-x sm:snap-mandatory sm:overflow-x-auto sm:pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {rowProds.map((p) => (
+            <div key={p._id} className="sm:w-48 sm:shrink-0 sm:snap-start lg:w-56">
+              <Link href={`/product/${p.slug}`}>
+                <ProductCard p={p} />
+              </Link>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
+  );
+}
+
+function CategoryProductRows() {
+  const [tree, setTree] = useState<ParentNode[]>([]);
+  const [allProds, setAllProds] = useState<Prod[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAll, setShowAll] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      try {
+        const [cats, subDocs, prods] = await Promise.all([
+          client.fetch<Cat[]>(CATS_QUERY).catch(() => [] as Cat[]),
+          client.fetch<SubDoc[]>(SUBS_QUERY).catch(() => [] as SubDoc[]),
+          client
+            .fetch<Prod[]>(`*[_type == "product"] | order(_createdAt desc) [0...500] { ${PRODUCT_FIELDS} }`)
+            .catch(() => [] as Prod[]),
+        ]);
+        if (!alive) return;
+        setAllProds(prods || []);
+        setTree(buildTree(cats || [], subDocs || [], prods || []));
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+
+    return () => { alive = false; };
+  }, []);
+
+  if (loading) {
+    return (
+      <section className="mx-auto max-w-6xl px-4 py-10">
+        <Skeleton n={4} h="h-48" />
+      </section>
+    );
+  }
+
+  const rows = tree.filter((p) => p.prods.length > 0);
+
+  /* ✅ Fallback — kisi wajah se tree khali ho to All Products grid */
+  if (rows.length === 0) {
+    if (allProds.length === 0) return null;
+    return (
+      <section className="mx-auto max-w-6xl px-4 py-10">
+        <SectionHead emoji="🛒" title="All Products" sub="Latest used auto parts" href="/shop" />
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          {allProds.slice(0, 8).map((p) => (
+            <Link key={p._id} href={`/product/${p.slug}`}>
+              <ProductCard p={p} />
+            </Link>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  const visible = showAll ? rows : rows.slice(0, MAX_CATEGORY_ROWS);
+
+  return (
+    <div>
+      {visible.map((parent, i) => (
+        <CategoryRow key={parent.key} parent={parent} alt={i % 2 === 0} />
+      ))}
+
+      {/* ✅ VIEW MORE CATEGORIES */}
+      {rows.length > MAX_CATEGORY_ROWS && (
+        <div className="mx-auto max-w-6xl px-4 pb-6 text-center">
+          <button
+            onClick={() => setShowAll((v) => !v)}
+            className="inline-flex items-center gap-2 rounded-xl border-2 border-[#F5A623] px-6 py-3 text-sm font-black text-[#F5A623] transition hover:bg-[#F5A623] hover:text-[#0A1929]">
+            {showAll ? (
+              <>
+                Show Less
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 15l-6-6-6 6" />
+                </svg>
+              </>
+            ) : (
+              <>
+                View More Categories ({rows.length - MAX_CATEGORY_ROWS} more)
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
 /* ============================================================
    6. FEATURED SLIDER
 ============================================================ */
-
 function FeaturedSlider() {
   const ref = useRef<HTMLDivElement>(null);
   const [prods, setProds] = useState<Prod[]>([]);
@@ -590,7 +836,7 @@ function FeaturedSlider() {
     ).then(setProds).catch(() => {});
   }, []);
 
-  const scrollBy = (dir: 1 | -1) => ref.current?.scrollBy({ left: dir * 280, behavior: "smooth" });
+  const scrollDir = (dir: 1 | -1) => ref.current?.scrollBy({ left: dir * 280, behavior: "smooth" });
 
   return (
     <section className="bg-gray-50 py-10 dark:bg-[#0D1F30]/60">
@@ -598,9 +844,9 @@ function FeaturedSlider() {
         <div className="flex items-end justify-between gap-3">
           <SectionHead emoji="🔥" title="Featured Products" sub="Swipe karo ya arrows dabao" />
           <div className="hidden shrink-0 gap-2 pb-1 sm:flex">
-            <button onClick={() => scrollBy(-1)} aria-label="Prev"
+            <button onClick={() => scrollDir(-1)} aria-label="Prev"
               className="flex h-10 w-10 items-center justify-center rounded-full bg-white ring-1 ring-gray-200 shadow-sm transition hover:bg-amber-50 hover:text-[#F5A623] dark:bg-[#112240] dark:ring-[#1E3A52] dark:hover:bg-[#F5A623]/20 dark:hover:text-[#F5A623]">◀</button>
-            <button onClick={() => scrollBy(1)} aria-label="Next"
+            <button onClick={() => scrollDir(1)} aria-label="Next"
               className="flex h-10 w-10 items-center justify-center rounded-full bg-white ring-1 ring-gray-200 shadow-sm transition hover:bg-amber-50 hover:text-[#F5A623] dark:bg-[#112240] dark:ring-[#1E3A52] dark:hover:bg-[#F5A623]/20 dark:hover:text-[#F5A623]">▶</button>
           </div>
         </div>
@@ -625,9 +871,8 @@ function FeaturedSlider() {
 }
 
 /* ============================================================
-   7. SOCIAL PAGES (unchanged — already fine)
+   7. SOCIAL PAGES
 ============================================================ */
-
 const FB_URL = "https://www.facebook.com/profile.php?id=100064020401353";
 const IG_URL = "https://instagram.com/autobrothers.pk";
 const IG_PROFILE_IMG = "https://i.ibb.co/84814xg5/b16b-5542697ff3a9c-1296x.webp";
@@ -726,10 +971,10 @@ function SocialPages() {
 }
 
 /* ============================================================
-   HOME — ✅ SPLASH AB OVERLAY HAI, CONTENT HAMESHA RENDER
-   (SEO: Google ko poora homepage HTML milta hai)
+   HOME — ✅ SPLASH overlay, content hamesha render (SEO)
+   ✅ Category rows ab SUB-CATEGORIES ke sath:
+      category name → sub-chips → 4 products → agli category...
 ============================================================ */
-
 export default function HomeContent() {
   const [splashDone, setSplashDone] = useState(false);
 
@@ -757,7 +1002,7 @@ export default function HomeContent() {
       <NewArrivals />
       <CategoriesSection />
       <VehicleSection />
-      <CategoryShop />
+      <CategoryProductRows />
       <FeaturedSlider />
       <SocialPages />
     </div>

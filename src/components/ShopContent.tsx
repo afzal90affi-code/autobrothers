@@ -621,11 +621,14 @@ function SocialPages() {
 }
 
 /* ============================================================
-   SHOP CONTENT ✅ v5 — SORT + CATEGORY-WISE SLIDERS
-   - All view: har category ka apna SLIDER (New Arrivals jaisa)
-   - Sort dropdown: Newest (date) / Price Low-High / Price High-Low
-   - Category/search/brand filter laga ho to flat grid (sorted)
-   - Baqi sab v3 jaisa: navbar dropdowns, chips, sliders, social
+   SHOP CONTENT ✅ v6 — SEO/SSR FIX
+   - ✅ FAULT FIXED: pehle `if (loading) return skeleton` tha — server
+     ko sirf khali skeleton jata tha, H1/hero/products crawlers ko
+     nazar nahi aate the (Bing: "H1 missing" isi wajah se aaya tha).
+   - Ab poora page structure (navbar + hero + H1) HAMESHA server se
+     render hota hai. Sirf product cards loading me pulse karte hain.
+   - Baqi sab v5 jaisa: sort dropdown, category-wise sliders, navbar
+     dropdowns, chips, brand filter, social pages.
 ============================================================ */
 export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
   const [active, setActive] = useState(initialCat);
@@ -766,23 +769,6 @@ export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
         : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-[#1E3A52] dark:text-gray-400 dark:hover:text-white"
     }`;
 
-  /* ---------- LOADING ---------- */
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-[#0A1929]">
-        <div className="h-12 border-b border-gray-200 bg-white dark:border-[#1E3A52] dark:bg-[#0A1929]" />
-        <div className="mx-auto max-w-6xl px-4 py-10">
-          <div className="h-40 animate-pulse rounded-3xl bg-gray-100 dark:bg-[#13293D]" />
-          <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {[...Array(8)].map((_, i) => (
-              <div key={i} className="h-56 animate-pulse rounded-2xl bg-gray-100 dark:bg-[#13293D]" />
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0A1929]">
 
@@ -804,14 +790,18 @@ export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
             }`} />
           </button>
 
-          {/* ✅ HAR MAIN CATEGORY — sath me sub-categories dropdown */}
-          {tree.map((node) => (
-            <NavItem key={node.key} node={node} active={active} onOpen={openCat} />
-          ))}
+          {/* ✅ HAR MAIN CATEGORY — sath me sub-categories dropdown (loading me pulse pills) */}
+          {loading
+            ? [0, 1, 2, 3, 4].map((i) => (
+                <span key={i} className="mx-2 h-5 w-16 animate-pulse rounded-full bg-gray-200 dark:bg-[#1E3A52]" />
+              ))
+            : tree.map((node) => (
+                <NavItem key={node.key} node={node} active={active} onOpen={openCat} />
+              ))}
         </div>
       </div>
 
-      {/* ===== 2. HERO BANNER ===== */}
+      {/* ===== 2. HERO BANNER — ✅ v6: ye H1 ab hamesha server HTML me jata hai ===== */}
       <section className="relative overflow-hidden">
         {activeImg && (
           <img src={wm(activeImg, 1200, 70)} alt={`${activeName} used auto parts — AutoBrothers Pakistan`}
@@ -973,7 +963,9 @@ export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
               {brandFilter && <span className="text-[#F5A623]"> — {brandFilter}</span>}
             </h2>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              {query ? `"${query}" — ` : ""}{filtered.length} products
+              {loading
+                ? "Loading products…"
+                : <>{query ? `"${query}" — ` : ""}{filtered.length} products</>}
             </p>
           </div>
 
@@ -999,7 +991,15 @@ export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
           </div>
         </div>
 
-        {filtered.length === 0 ? (
+        {loading ? (
+          /* ✅ v6: loading me bhi page ka structure server se aata hai —
+             sirf cards pulse karte hain (pehle POORA page skeleton tha) */
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="h-56 animate-pulse rounded-2xl bg-gray-100 dark:bg-[#13293D]" />
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
           <>
             <div className="rounded-2xl bg-white py-14 text-center ring-1 ring-gray-100 dark:bg-[#112240] dark:ring-[#1E3A52]">
               <p className="text-sm font-bold text-slate-700 dark:text-white">Koi product nahi mila</p>

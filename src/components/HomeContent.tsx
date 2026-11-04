@@ -94,7 +94,7 @@ function buildTree(cats: Cat[], subDocs: SubDoc[], prods: Prod[]): ParentNode[] 
   const findParent = (slug?: string, name?: string): ParentNode | undefined => {
     const s = norm(slug); const n = norm(name);
     if (!s && !n) return undefined;
-    for (const v of Array.from(parents.values())) {
+    for (const v of parents.values()) {
       const vs = norm(v.slug); const vn = norm(v.name);
       if (s && (vs === s || vn === s)) return v;
       if (n && (vn === n || vs === n)) return v;
@@ -132,7 +132,7 @@ function buildTree(cats: Cat[], subDocs: SubDoc[], prods: Prod[]): ParentNode[] 
   (subDocs || []).forEach((sd) => {
     if (!sd?.title) return;
     let parent =
-      (sd.parentId && Array.from(parents.values()).find((v) => v._id && v._id === sd.parentId)) ||
+      (sd.parentId && [...parents.values()].find((v) => v._id && v._id === sd.parentId)) ||
       findParent(sd.parentSlug, sd.parentTitle);
     if (!parent) {
       parent = ensureParent(
@@ -189,7 +189,7 @@ function buildTree(cats: Cat[], subDocs: SubDoc[], prods: Prod[]): ParentNode[] 
   });
 
   /* finalize */
-  const arr = Array.from(parents.values());
+  const arr = [...parents.values()];
   arr.forEach((v) => {
     if (!v.img && v.prods.length && v.prods[0].image) v.img = v.prods[0].image;
     v.subs.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));

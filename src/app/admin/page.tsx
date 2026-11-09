@@ -6,6 +6,7 @@ import { client } from "../../lib/sanityClient";
 
 /* ---------- Quick action links ---------- */
 const ACTIONS = [
+  { label: "Main Categories", href: "/admin/maincategories", icon: "🌟", desc: "Top-level groups" },
   { label: "Add Product", href: "/admin/products", icon: "🛒", desc: "Naya part list karo" },
   { label: "Write Blog", href: "/admin/blog", icon: "✍️", desc: "Quill editor se post" },
   { label: "Add Car", href: "/admin/new-cars", icon: "🚗", desc: "New car + finance" },
@@ -13,12 +14,12 @@ const ACTIONS = [
   { label: "Sub Categories", href: "/admin/subcategories", icon: "🗂️", desc: "Manage sub-categories" },
 ];
 
-type Counts = { products: number; blogs: number; cars: number; banks: number; cats: number; subs: number };
+type Counts = { products: number; blogs: number; cars: number; banks: number; cats: number; subs: number; maincats: number };
 type RecentItem = { _id: string; title: string; type: string; href: string; date: string };
 type RecentItemsResponse = { items: RecentItem[] };
 
 export default function AdminDashboard() {
-  const [counts, setCounts] = useState<Counts>({ products: 0, blogs: 0, cars: 0, banks: 0, cats: 0, subs: 0 });
+  const [counts, setCounts] = useState<Counts>({ products: 0, blogs: 0, cars: 0, banks: 0, cats: 0, subs: 0, maincats: 0 });
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -30,6 +31,7 @@ export default function AdminDashboard() {
       client.fetch<number>('count(*[_type == "financeBank"])'),
       client.fetch<number>('count(*[_type == "category"])'),
       client.fetch<number>('count(*[_type == "subcategory"])'),
+      client.fetch<number>('count(*[_type == "mainCategory"])'),
       client.fetch<RecentItemsResponse>(
         `{
           "items": (
@@ -46,14 +48,15 @@ export default function AdminDashboard() {
         }`
       ).then((d) => setRecent(d?.items ?? [])).catch(() => {}),
     ])
-      .then(([p, b, c, bk, cat, sub]) =>
-        setCounts({ products: p, blogs: b, cars: c, banks: bk, cats: cat, subs: sub })
+      .then(([p, b, c, bk, cat, sub, mc]) =>
+        setCounts({ products: p, blogs: b, cars: c, banks: bk, cats: cat, subs: sub, maincats: mc })
       )
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
   const statCards = [
+    { label: "Main Categories", value: counts.maincats, href: "/admin/maincategories", icon: "🌟" },
     { label: "Total Products", value: counts.products, href: "/admin/products", icon: "🛒" },
     { label: "Total Blogs", value: counts.blogs, href: "/admin/blog", icon: "📝" },
     { label: "New Cars", value: counts.cars, href: "/admin/new-cars", icon: "🚗" },
@@ -80,8 +83,8 @@ export default function AdminDashboard() {
           </p>
         </div>
 
-        {/* ---------- Quick Actions (5 cards) ---------- */}
-        <div className="mb-8 grid grid-cols-2 lg:grid-cols-5 gap-3">
+        {/* ---------- Quick Actions (6 cards) ---------- */}
+        <div className="mb-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {ACTIONS.map((a) => (
             <Link key={a.label} href={a.href}
               className="group rounded-2xl bg-gradient-to-br from-[#F5A623] to-[#FFB94D] p-[1.5px] transition hover:shadow-lg hover:shadow-amber-500/20">
@@ -98,7 +101,7 @@ export default function AdminDashboard() {
 
         {/* ---------- Stats Grid ---------- */}
         <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-gray-400">Overview</h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {statCards.map((c) => (
             <Link key={c.label} href={c.href}
               className="group bg-white dark:bg-[#13293D] p-5 rounded-2xl border border-gray-200 dark:border-[#1E3A52] transition hover:border-[#F5A623]/50 hover:shadow-lg">

@@ -37,8 +37,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     fetchSlugs(
       `*[_type in ["post", "blog", "blogPost"] && defined(slug.current)]{ "slug": slug.current, "_updatedAt": _updatedAt }`
     ),
+    // 3-level hierarchy: mainCategory + category + subcategory — teeno
+    // ke /products?cat=<slug> URLs sitemap me jayenge
     fetchSlugs(
-      `*[_type in ["category", "subcategory"] && defined(slug.current)]{ "slug": slug.current, "_updatedAt": _updatedAt }`
+      `*[_type in ["mainCategory", "category", "subcategory"] && defined(slug.current)]{ "slug": slug.current, "_updatedAt": _updatedAt }`
     ),
   ]);
 

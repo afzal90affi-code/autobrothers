@@ -1,10 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { ShoppingCart, Search, Sun, Moon, Menu, X, FileText, Car, Home } from "lucide-react";
 import { useCart } from "../context/CartContext";
+import { client } from "../lib/sanityClient";
+import SecondaryNav, {
+  type NavCat,
+  type NavMainCat,
+  type NavSection,
+} from "./SecondaryNav";
 
 type Props = { onOpenCart: () => void; onOpenSearch: () => void };
 
@@ -19,15 +25,107 @@ const PLAIN = [
   { href: "/contact-us", label: "Contact" },
 ];
 
+/* ============================================================
+   ✅ NAYA — NAVBAR SECONDARY BAR DATA
+   Main categories + categories (mainId/mainTitle/mainSlug ke
+   sath) — SecondaryNav inhi se main chips + second row banata
+   hai. Junk titles filter (test/demo/sample waaghera).
+============================================================ */
+const NAV_CATS_QUERY = `{
+  "mainCats": *[_type == "mainCategory"] | order(coalesce(order, 9999) asc, title asc) {
+    _id, title, "slug": slug.current
+  },
+  "cats": *[_type == "category"] | order(coalesce(order, 9999) asc, title asc) {
+    _id, title, "slug": slug.current,
+    "mainId": mainCategory->_id,
+    "mainTitle": mainCategory->title,
+    "mainSlug": mainCategory->slug.current
+  }
+}`;
+
+type NavData = { mainCats: NavMainCat[]; cats: NavCat[] };
+
+const JUNK = ["test", "delete", "demo", "sample", "dummy", "asdf", "check", "us news"];
+const isJunk = (t?: string) => !!t && JUNK.some((j) => (t || "").toLowerCase().includes(j));
+
+/* pathname → kaunsa section? (sirf in pages pe secondary bar dikhega) */
+function sectionOf(pathname: string | null): NavSection | null {
+  if (!pathname) return null;
+  if (pathname === "/shop" || pathname.startsWith("/shop/") || pathname.startsWith("/product/"))
+    return "shop";
+  if (pathname === "/blog" || pathname.startsWith("/blog/")) return "blog";
+  if (pathname === "/new-cars" || pathname.startsWith("/new-cars/")) return "cars";
+  return null;
+}
+
+/* ============================================================
+   ✅ NAYA — SECONDARY BAR (Suspense ke andar render hota hai)
+   useSearchParams static pages pe Suspense maangta hai isliye
+   ye chhota component alag hai. Section ke hisaab se:
+   - shop → /shop?cat=...  (main categories + second row)
+   - blog → /blog?cat=...
+   - cars → /new-cars?brand=...
+============================================================ */
+function SecondaryBar({ cats, mainCats }: { cats: NavCat[]; mainCats: NavMainCat[] }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const section = sectionOf(pathname);
+  if (!section) return null;
+
+  const activeCat = searchParams.get(section === "cars" ? "brand" : "cat");
+
+  return (
+    <SecondaryNav
+      section={section}
+      cats={cats}
+      activeCat={activeCat}
+      mainCats={mainCats}
+    />
+  );
+}
+
 export default function Navbar({ onOpenCart, onOpenSearch }: Props) {
   const pathname = usePathname();
   const { totalItems } = useCart();
   const [menuOpen, setMenuOpen] = useState(false);
   const [isDark, setIsDark] = useState(true);
+  const [cats, setCats] = useState<NavCat[]>([]);
+  const [mainCats, setMainCats] = useState<NavMainCat[]>([]);
 
   useEffect(() => {
     setIsDark(document.documentElement.classList.contains("dark"));
   }, []);
+
+  /* ✅ NAYA: categories ek dafa fetch — sirf shop/blog/cars pages pe
+     (home/about pe fetch hi nahi hota, network bachao) */
+  const section = sectionOf(pathname);
+
+  useEffect(() => {
+    if (!section) return;
+    let alive = true;
+    client
+      .fetch<NavData>(NAV_CATS_QUERY)
+      .then((d) => {
+        if (!alive || !d) return;
+        setMainCats(
+          (d.mainCats || []).filter((m) => m?.title && m?.slug && !isJunk(m.title))
+        );
+        setCats(
+          (d.cats || []).filter((c) => c?.title && c?.slug && !isJunk(c.title))
+        );
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [section]);
+
+  // "/" sirf exact match par active hoga, warna Home har page par active dikhega
+  const isActive = (href: string) =>
+    href === "/"
+      ? pathname === "/"
+      : pathname === href || pathname.startsWith(href + "/");
 
   const toggleTheme = () => {
     const next = !isDark;
@@ -35,12 +133,6 @@ export default function Navbar({ onOpenCart, onOpenSearch }: Props) {
     document.documentElement.classList.toggle("dark", next);
     try { localStorage.setItem("theme", next ? "dark" : "light"); } catch {}
   };
-
-  // "/" sirf exact match par active hoga, warna Home har page par active dikhega
-  const isActive = (href: string) =>
-    href === "/"
-      ? pathname === "/"
-      : pathname === href || pathname.startsWith(href + "/");
 
   return (
     <nav className="sticky top-0 z-50">
@@ -125,6 +217,19 @@ export default function Navbar({ onOpenCart, onOpenSearch }: Props) {
           </div>
         </div>
       </div>
+
+      {/* ============================================================
+          ✅ NAYA — SECONDARY BAR (navbar ke neeche, sticky sath)
+          Shop page: main categories chips + click pe uski attached
+          categories neeche second row me.
+          Blog/Cars pages: apne apne chips (purana style).
+          Home/About/Contact pe ye bar bilkul hidden.
+      ============================================================ */}
+      {section && (
+        <Suspense fallback={null}>
+          <SecondaryBar cats={cats} mainCats={mainCats} />
+        </Suspense>
+      )}
 
       {/* ---- Mobile menu — themed ---- */}
       {menuOpen && (

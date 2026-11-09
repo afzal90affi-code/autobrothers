@@ -8,14 +8,16 @@ const ALLOWED = [
   "blog", "blogCategory", "blogSubcategory",
   "product", "category", "subcategory",
   "car", "newCar", "financeBank", "carBrand",
+  "mainCategory",
 ];
 
 /* ============================================================
-   POST — Create (product, blog, category, car, bank...)
+   POST — Create (product, blog, category, car, bank, mainCategory...)
 ============================================================ */
 export async function POST(req: NextRequest) {
   try {
-    const { doc } = await req.json();
+    const body = await req.json();
+    const doc = body?.doc ?? body;
     if (!doc?._type || !ALLOWED.includes(doc._type)) {
       return NextResponse.json({ success: false, error: "Invalid type" }, { status: 400 });
     }

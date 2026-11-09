@@ -1,131 +1,304 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { MessageCircle, Phone, ChevronRight } from "lucide-react";
 import { client } from "../lib/sanityClient";
 
-const WHATSAPP_NUMBER = "923222806245";
-const LOGO_URL = "/logo.png"; // ⚠️ logo public/ folder mein dalo — CDN link permanent nahi hota
+/* ============================================================
+   AutoBrothers Footer — 3-Level Grouped Categories Version
+   Hierarchy: MainCategory -> Category -> SubCategory
+   - Main Category (orange heading) -> uske neeche Categories
+     (white bold) -> har category ke neeche Sub Categories (gray)
+   - Links: /products?cat=<slug> — /products page teeno level
+     ke slugs handle karta hai
+   - Jis category ka Main Category set nahi, wo "More Categories"
+     block me apne aap dikhegi
+   - Sub Category / Category ka slug kabhi change na karna
+   ============================================================ */
 
-const FB_URL = "https://www.facebook.com/profile.php?id=100064020401353";
-const IG_URL = "https://instagram.com/autobrothers.pk";
+const WHATSAPP_NUMBER = "923222806245";
 
 const SHOP_LINKS = [
-  { l: "All Products", h: "/products" },
-  { l: "New Cars", h: "/new-cars" },
-  { l: "Car Finance", h: "/car-finance" },
-  { l: "Cart", h: "/cart" },
+  { label: "All Products", href: "/products" },
+  { label: "New Cars", href: "/new-cars" },
+  { label: "Cart", href: "/cart" },
 ];
 
 const COMPANY_LINKS = [
-  { l: "About Us", h: "/about" },
-  { l: "Contact Us", h: "/contact-us" },
-  { l: "Blog", h: "/blog" },
+  { label: "About Us", href: "/about" },
+  { label: "Contact Us", href: "/contact-us" },
+  { label: "Blog", href: "/blog" },
 ];
 
-/* ✅ ADSENSE REQUIRED — legal pages ke links (approval ke liye mandatory) */
 const LEGAL_LINKS = [
-  { l: "Privacy Policy", h: "/privacy-policy" },
-  { l: "Terms & Conditions", h: "/terms" },
-  { l: "Disclaimer", h: "/disclaimer" },
+  { label: "Privacy Policy", href: "/privacy-policy" },
+  { label: "Terms & Conditions", href: "/terms" },
+  { label: "Disclaimer", href: "/disclaimer" },
 ];
 
-type Cat = { _id: string; title: string; slug: string };
+interface SubCat {
+  _id: string;
+  title: string;
+  slug: string;
+}
+
+interface CatNode {
+  _id: string;
+  title: string;
+  slug: string;
+  subs: SubCat[];
+}
+
+interface MainCatGroup {
+  _id: string;
+  title: string;
+  slug: string;
+  cats: CatNode[];
+}
+
+const MAX_GROUPS = 6;  // footer me max main categories
+const MAX_CATS = 6;    // har main category ke neeche max categories
+const MAX_SUBS = 4;    // har category ke neeche max sub links
 
 export default function Footer() {
-  const [cats, setCats] = useState<Cat[]>([]);
+  const [groups, setGroups] = useState<MainCatGroup[]>([]);
+  const [orphanCats, setOrphanCats] = useState<CatNode[]>([]);
+  const year = new Date().getFullYear();
 
   useEffect(() => {
-    client
-      .fetch<Cat[]>(`*[_type == "category" && defined(slug.current)] | order(coalesce(order, 9999) asc, title asc) [0...6]{ _id, title, "slug": slug.current }`)
-      .then(setCats)
-      .catch(() => {});
+    // Query 1: Main Categories -> unki Categories -> unki Sub Categories
+    const groupsQuery = `*[_type == "mainCategory" && defined(slug.current)] | order(coalesce(order, 9999) asc, title asc)[0...${MAX_GROUPS}]{
+      _id, title, "slug": slug.current,
+      "cats": *[_type == "category" && defined(slug.current) && references(^._id)] | order(coalesce(order, 9999) asc, title asc)[0...${MAX_CATS}]{
+        _id, title, "slug": slug.current,
+        "subs": *[_type == "subcategory" && defined(slug.current) && references(^._id)] | order(title asc)[0...${MAX_SUBS}]{
+          _id, title, "slug": slug.current
+        }
+      }
+    }`;
+
+    // Query 2: Categories jin ka Main Category set nahi (back-compat)
+    const orphansQuery = `*[_type == "category" && defined(slug.current) && !defined(mainCategory)] | order(coalesce(order, 9999) asc, title asc)[0...10]{
+      _id, title, "slug": slug.current,
+      "subs": *[_type == "subcategory" && defined(slug.current) && references(^._id)] | order(title asc)[0...${MAX_SUBS}]{
+        _id, title, "slug": slug.current
+      }
+    }`;
+
+    Promise.all([
+      client.fetch(groupsQuery).catch(() => [] as MainCatGroup[]),
+      client.fetch(orphansQuery).catch(() => [] as CatNode[]),
+    ]).then(([g, o]) => {
+      setGroups(Array.isArray(g) ? g : []);
+      setOrphanCats(Array.isArray(o) ? o : []);
+    });
   }, []);
 
-  return (
-    <footer className="bg-[#13293D] border-t border-[#1E3A52] text-gray-400">
-      {/* ---------- MAIN FOOTER ---------- */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 grid grid-cols-2 md:grid-cols-5 gap-8">
+  const waLink = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
+    "Salam! Mujhe auto parts chahiye."
+  )}`;
 
-        {/* Brand + About — AdSense ko site ka clear purpose chahiye */}
-        <div className="col-span-2">
-          <Link href="/" className="flex items-center gap-2">
-            <img src={LOGO_URL} alt="AutoBrothers Pakistan — Used Auto Parts" className="h-10 w-auto rounded-lg" />
-            <span className="text-lg font-black text-white">Auto<span className="text-[#F5A623]">Brothers</span></span>
-          </Link>
-          <p className="mt-3 text-xs leading-relaxed max-w-sm">
-            Pakistan's trusted marketplace for quality checked used auto parts — engines, catalytic
-            converters, transmissions, ignition coils aur bohot kuch. Expert car care guides ke
-            saath, all Pakistan delivery.
+  const linkCol = (title: string, links: { label: string; href: string }[]) => (
+    <div>
+      <h4 className="text-sm font-bold uppercase tracking-wider text-white mb-4">{title}</h4>
+      <ul className="space-y-2.5">
+        {links.map((l) => (
+          <li key={l.href + l.label}>
+            <Link
+              href={l.href}
+              className="text-xs text-gray-400 hover:text-[#F5A623] transition-colors inline-flex items-center gap-1"
+            >
+              <ChevronRight size={11} className="text-[#F5A623]" /> {l.label}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+
+  return (
+    <footer className="bg-[#0A1929] text-gray-300 border-t border-[#1E3A52]">
+      {/* ===== CONTACT STRIP ===== */}
+      <div className="bg-[#13293D] border-b border-[#1E3A52]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <p className="text-sm text-gray-300 text-center sm:text-left">
+            Koi part chahiye?{" "}
+            <span className="font-bold text-white">WhatsApp karke foran pochho</span> — Japan
+            imported, tested &amp; warranted parts.
           </p>
-          <div className="mt-4 flex gap-2">
-            <a href={`https://wa.me/${WHATSAPP_NUMBER}`} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp"
-              className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1E3A52] hover:bg-green-500 transition text-sm">📱</a>
-            <a href={FB_URL} target="_blank" rel="noopener noreferrer" aria-label="Facebook"
-              className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1E3A52] hover:bg-blue-500 transition text-sm">📘</a>
-            <a href={IG_URL} target="_blank" rel="noopener noreferrer" aria-label="Instagram"
-              className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1E3A52] hover:bg-pink-500 transition text-sm">📸</a>
+          <div className="flex items-center gap-3">
+            <a
+              href={waLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-[#25D366] hover:bg-[#1FB855] text-white text-xs font-bold px-4 py-2.5 rounded-lg transition-colors"
+            >
+              <MessageCircle size={14} /> {WHATSAPP_NUMBER}
+            </a>
+            <a
+              href={`tel:+${WHATSAPP_NUMBER}`}
+              className="inline-flex items-center gap-2 bg-[#F5A623] hover:bg-[#D4911E] text-[#0A1929] text-xs font-bold px-4 py-2.5 rounded-lg transition-colors"
+            >
+              <Phone size={14} /> Call Now
+            </a>
           </div>
         </div>
-
-        {/* Shop Links */}
-        <div>
-          <h4 className="font-bold text-sm mb-3 text-white">Shop</h4>
-          {SHOP_LINKS.map((n) => (
-            <Link key={n.l} href={n.h} className="block py-1.5 text-xs hover:text-[#F5A623] transition-colors">
-              {n.l}
-            </Link>
-          ))}
-        </div>
-
-        {/* Categories — Sanity se dynamic */}
-        <div>
-          <h4 className="font-bold text-sm mb-3 text-white">Parts Categories</h4>
-          {cats.length === 0 ? (
-            <p className="text-xs text-gray-600">Loading…</p>
-          ) : (
-            cats.map((c) => (
-              <Link key={c._id} href={`/products?cat=${c.slug}`}
-                className="block py-1.5 text-xs hover:text-[#F5A623] transition-colors truncate">
-                {c.title}
-              </Link>
-            ))
-          )}
-        </div>
-
-        {/* Company + Legal — ✅ AdSense requirement yahan clear dikhni chahiye */}
-        <div>
-          <h4 className="font-bold text-sm mb-3 text-white">Company</h4>
-          {COMPANY_LINKS.map((n) => (
-            <Link key={n.l} href={n.h} className="block py-1.5 text-xs hover:text-[#F5A623] transition-colors">
-              {n.l}
-            </Link>
-          ))}
-          <h4 className="font-bold text-sm mt-5 mb-2 text-white">Legal</h4>
-          {LEGAL_LINKS.map((n) => (
-            <Link key={n.l} href={n.h} className="block py-1.5 text-xs hover:text-[#F5A623] transition-colors">
-              {n.l}
-            </Link>
-          ))}
-        </div>
       </div>
 
-      {/* ---------- CONTACT STRIP (call number hata diya) ---------- */}
+      {/* ===== MAIN FOOTER ===== */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12">
+        {/* Brand + link columns */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
+          {/* Brand */}
+          <div className="col-span-2 md:col-span-1">
+            <Link href="/" className="inline-flex items-baseline gap-0.5 mb-3">
+              <span className="text-2xl font-extrabold text-white">Auto</span>
+              <span className="text-2xl font-extrabold text-[#F5A623]">Brothers</span>
+            </Link>
+            <p className="text-xs leading-relaxed text-gray-400">
+              Pakistan ka trusted online store for Japan imported used auto parts — engines,
+              transmissions, electrical parts aur bohat kuch. Quality checked, warranted, foran
+              delivery.
+            </p>
+          </div>
+
+          {linkCol("Shop", SHOP_LINKS)}
+          {linkCol("Company", COMPANY_LINKS)}
+          {linkCol("Legal", LEGAL_LINKS)}
+        </div>
+
+        {/* ===== PARTS CATEGORIES — 3-level grouped ===== */}
+        {(groups.length > 0 || orphanCats.length > 0) && (
+          <div className="border-t border-[#1E3A52] pt-8">
+            <h4 className="text-sm font-bold uppercase tracking-wider text-white mb-5">
+              Parts Categories
+            </h4>
+
+            {/* Main Category groups */}
+            {groups.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                {groups.map((g) => (
+                  <div key={g._id}>
+                    <Link
+                      href={`/products?cat=${g.slug}`}
+                      className="text-xs font-bold text-[#F5A623] hover:underline"
+                    >
+                      {g.title}
+                    </Link>
+                    {g.cats && g.cats.length > 0 && (
+                      <ul className="mt-3 space-y-3">
+                        {g.cats.map((c) => (
+                          <li key={c._id}>
+                            <Link
+                              href={`/products?cat=${c.slug}`}
+                              className="text-xs font-bold text-white hover:text-[#F5A623] transition-colors"
+                            >
+                              {c.title}
+                            </Link>
+                            {c.subs && c.subs.length > 0 && (
+                              <ul className="mt-1.5 space-y-1.5 ml-2 border-l border-[#1E3A52] pl-2.5">
+                                {c.subs.map((s) => (
+                                  <li key={s._id}>
+                                    <Link
+                                      href={`/products?cat=${s.slug}`}
+                                      className="text-[11px] text-gray-400 hover:text-[#F5A623] transition-colors"
+                                    >
+                                      {s.title}
+                                    </Link>
+                                  </li>
+                                ))}
+                                {c.subs.length >= MAX_SUBS && (
+                                  <li>
+                                    <Link
+                                      href={`/products?cat=${c.slug}`}
+                                      className="text-[10px] text-gray-500 hover:text-[#F5A623] transition-colors"
+                                    >
+                                      + more
+                                    </Link>
+                                  </li>
+                                )}
+                              </ul>
+                            )}
+                          </li>
+                        ))}
+                        {g.cats.length >= MAX_CATS && (
+                          <li>
+                            <Link
+                              href={`/products?cat=${g.slug}`}
+                              className="text-[10px] text-gray-500 hover:text-[#F5A623] transition-colors"
+                            >
+                              + {g.cats.length} categories dekho
+                            </Link>
+                          </li>
+                        )}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Categories jinka Main Category set nahi */}
+            {orphanCats.length > 0 && (
+              <div className={groups.length > 0 ? "mt-8 pt-6 border-t border-[#1E3A52]/60" : ""}>
+                {groups.length > 0 && (
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-4">
+                    More Categories
+                  </p>
+                )}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6">
+                  {orphanCats.map((cat) => (
+                    <div key={cat._id}>
+                      <Link
+                        href={`/products?cat=${cat.slug}`}
+                        className="text-xs font-bold text-[#F5A623] hover:underline"
+                      >
+                        {cat.title}
+                      </Link>
+                      {cat.subs && cat.subs.length > 0 && (
+                        <ul className="mt-3 space-y-2">
+                          {cat.subs.map((s) => (
+                            <li key={s._id}>
+                              <Link
+                                href={`/products?cat=${s.slug}`}
+                                className="text-xs text-gray-400 hover:text-[#F5A623] transition-colors"
+                              >
+                                {s.title}
+                              </Link>
+                            </li>
+                          ))}
+                          {cat.subs.length >= MAX_SUBS && (
+                            <li>
+                              <Link
+                                href={`/products?cat=${cat.slug}`}
+                                className="text-[10px] text-gray-500 hover:text-[#F5A623] transition-colors"
+                              >
+                                + more
+                              </Link>
+                            </li>
+                          )}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ===== BOTTOM BAR ===== */}
       <div className="border-t border-[#1E3A52]">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-          <p>💬 <a href={`https://wa.me/${WHATSAPP_NUMBER}`} target="_blank" rel="noopener noreferrer" className="hover:text-[#F5A623] font-semibold text-gray-300">WhatsApp Orders</a></p>
-          <p>📍 Karachi, Pakistan — 🕘 Mon–Sat, 9am–8pm</p>
-          <p>💳 Cash on Delivery • Bank Transfer</p>
-        </div>
-      </div>
-
-      {/* ---------- BOTTOM BAR (Admin link hata diya) ---------- */}
-      <div className="border-t border-[#1E3A52] bg-[#0D1F30]">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-2">
-          <p className="text-[11px] text-gray-600">
-            © {new Date().getFullYear()} AutoBrothers.pk — All rights reserved.
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <p className="text-[11px] text-gray-500">
+            © {year} <span className="font-bold text-gray-400">AutoBrothers.pk</span> — All Rights
+            Reserved.
           </p>
-          <span className="text-[10px] text-gray-600">This site uses cookies & serves ads via Google AdSense</span>
+          <p className="text-[11px] text-gray-500">
+            Japan Imported Used Auto Parts — Whole Pakistan Delivery
+          </p>
         </div>
       </div>
     </footer>

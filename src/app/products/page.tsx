@@ -20,7 +20,9 @@ const condBadge = (c: string) => {
 };
 
 /* ============================================================
-   MAIN CONTENT — ab SSR-safe (Suspense/useSearchParams hata diye)
+   MAIN CONTENT — SSR-safe + 3-level hierarchy support
+   ?cat= param: mainCategory slug, category slug, subcategory
+   slug — teeno chalte hain
    ============================================================ */
 function ProductsContent() {
   const { addToCart } = useCart();
@@ -51,7 +53,9 @@ function ProductsContent() {
             "subTitle": subcategory->title,
             "subSlug": subcategory->slug.current,
             "catSlug": subcategory->parentCategory->slug.current,
-            "catTitle": subcategory->parentCategory->title
+            "catTitle": subcategory->parentCategory->title,
+            "topSlug": subcategory->parentCategory->mainCategory->slug.current,
+            "topTitle": subcategory->parentCategory->mainCategory->title
           }`
         )
         .then(setProds)
@@ -59,9 +63,7 @@ function ProductsContent() {
     });
   }, []);
 
-  /* ---------- ✅ URL params sync — navbar/search ke links ab kaam karenge ---------- */
-  // useSearchParams ki jagah window.location.search — wahi kaam, lekin ab
-  // Suspense boundary ki zaroorat nahi aur H1 server HTML me render hota hai
+  /* ---------- URL params sync — teeno level ke slugs ---------- */
   useEffect(() => {
     if (initialized || loading) return;
     const params = new URLSearchParams(window.location.search);
@@ -71,16 +73,16 @@ function ProductsContent() {
     if (urlQ) setSearchQ(urlQ);
 
     if (urlCat) {
-      // Main category slug ya subcategory slug — dono check karo
+      // MainCategory / Category / SubCategory — teeno level ke slugs check karo
       const isMainCat = cats.some((c: any) => c.slug === urlCat);
       const isSubCat = prods.some((p: any) => p.subSlug === urlCat);
-      if (isMainCat || isSubCat) setFilterCat(urlCat);
+      const isTopCat = prods.some((p: any) => p.topSlug === urlCat);
+      if (isMainCat || isSubCat || isTopCat) setFilterCat(urlCat);
     }
     setInitialized(true);
   }, [cats, prods, loading, initialized]);
 
-  /* ---------- ✅ Chips: main categories + subcategories dono ---------- */
-  // Jo categories/products mein actually use ho rahi hain
+  /* ---------- Chips: categories + subcategories ---------- */
   const usedMainCats = Array.from(
     new Map(prods.filter((p: any) => p.catSlug && p.catTitle).map((p: any) => [p.catSlug, p.catTitle]))
   ); // [slug, title][]
@@ -92,12 +94,13 @@ function ProductsContent() {
   /* ---------- Featured strip ---------- */
   const featured = prods.filter((p: any) => p.featured).slice(0, 6);
 
-  /* ---------- ✅ Filter + Sort ---------- */
+  /* ---------- Filter + Sort ---------- */
   const filtered = prods
     .filter((p: any) => {
       const mc =
         filterCat === "all" ||
-        p.catSlug === filterCat ||   // main category match
+        p.topSlug === filterCat ||   // mainCategory (top level) match
+        p.catSlug === filterCat ||   // category match
         p.subSlug === filterCat ||   // subcategory slug match
         p.subTitle === filterCat;    // subcategory title match (back-compat)
       const ms =
@@ -105,7 +108,8 @@ function ProductsContent() {
         (p.title || "").toLowerCase().includes(searchQ.toLowerCase()) ||
         (p.model || "").toLowerCase().includes(searchQ.toLowerCase()) ||
         (p.subTitle || "").toLowerCase().includes(searchQ.toLowerCase()) ||
-        (p.catTitle || "").toLowerCase().includes(searchQ.toLowerCase());
+        (p.catTitle || "").toLowerCase().includes(searchQ.toLowerCase()) ||
+        (p.topTitle || "").toLowerCase().includes(searchQ.toLowerCase());
       return mc && ms;
     })
     .sort((a: any, b: any) => {
@@ -122,6 +126,7 @@ function ProductsContent() {
       ? null
       : usedSubCats.find((s) => prods.find((p: any) => p.subTitle === s)?.subSlug === filterCat) ??
         cats.find((c: any) => c.slug === filterCat)?.title ??
+        prods.find((p: any) => p.topSlug === filterCat)?.topTitle ??
         prods.find((p: any) => p.catSlug === filterCat)?.catTitle ??
         prods.find((p: any) => p.subSlug === filterCat)?.subTitle ??
         filterCat;
@@ -267,7 +272,7 @@ function ProductsContent() {
             </div>
           </div>
 
-          {/* ===== Category chips (Main cats + Sub cats groups) ===== */}
+          {/* ===== Category chips ===== */}
           <div className="space-y-2 mb-6">
             {/* Main categories */}
             {usedMainCats.length > 0 && (
@@ -442,12 +447,7 @@ function ProductsContent() {
 }
 
 /* ============================================================
-   ✅ SSR-SAFE EXPORT — Suspense wrapper hata diya.
-   Pehle: useSearchParams ki wajah se Next.js build ke waqt static
-   HTML me sirf spinner (fallback) bhejta tha — H1, hero, sab kuch
-   client-side par render hota tha. Bing raw HTML parhta hai is liye
-   usay H1 nazar nahi aata tha ("H1 missing" on /products).
-   Ab: poora page (H1 samet) server HTML me render hota hai.
-   URL sync wahi kaam karta hai — window.location.search se.
+   ✅ SSR-SAFE EXPORT — poora page (H1 samet) server HTML me
+   render hota hai. URL sync window.location.search se.
    ============================================================ */
 export default ProductsContent;

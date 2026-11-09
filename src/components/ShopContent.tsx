@@ -6,6 +6,8 @@ import { client } from "../lib/sanityClient";
 
 /* ============================================================
    TYPES
+   ✅ v7: MainCat type + Cat me mainId/mainTitle/mainSlug +
+   ParentNode me isMain flag (3-level hierarchy support)
 ============================================================ */
 type Prod = {
   _id: string; title: string; slug: string;
@@ -18,7 +20,11 @@ type Prod = {
   createdAt?: string;
   category?: string; catSlug?: string; subCategory?: string; subSlug?: string;
 };
-type Cat = { _id: string; title: string; slug: string; img?: string };
+type Cat = {
+  _id: string; title: string; slug: string; img?: string;
+  mainId?: string; mainTitle?: string; mainSlug?: string;
+};
+type MainCat = { _id: string; title: string; slug: string; img?: string };
 type SubDoc = {
   _id: string; title: string; slug?: string; img?: string;
   parentId?: string; parentTitle?: string; parentSlug?: string;
@@ -26,7 +32,7 @@ type SubDoc = {
 type SubNode = { key: string; name: string; slug: string; img?: string; count: number };
 type ParentNode = {
   key: string; name: string; slug: string; img?: string; _id?: string;
-  synthetic?: boolean; subs: SubNode[]; prods: Prod[];
+  synthetic?: boolean; isMain?: boolean; subs: SubNode[]; prods: Prod[];
 };
 
 type Props = {
@@ -115,8 +121,11 @@ function sortProds(list: Prod[], mode: SortMode): Prod[] {
 /* ============================================================
    ✅ CATEGORY TREE BUILDER — main categories + sub-categories
    (HomeContent wala hi builder — dono files me same logic)
+   ✅ v7: mainCats parameter — Main Category docs se group nodes
+   bante hain, unke andar attached categories (dropdown/chips) aur
+   group ke saare products aggregate hote hain.
 ============================================================ */
-function buildTree(cats: Cat[], subDocs: SubDoc[], prods: Prod[]): ParentNode[] {
+function buildTree(cats: Cat[], subDocs: SubDoc[], prods: Prod[], mainCats: MainCat[]): ParentNode[] {
   const parents = new Map<string, ParentNode>();
 
   const ensureParent = (
@@ -153,6 +162,14 @@ function buildTree(cats: Cat[], subDocs: SubDoc[], prods: Prod[]): ParentNode[] 
     return undefined;
   };
 
+  /* ---- ✅ NAYA Step 0a: MAIN CATEGORIES — sab se oper wale groups ---- */
+  (mainCats || []).forEach((mc) => {
+    if (!mc?.title || !mc?.slug) return;
+    if (isJunk(norm(mc.title))) return;
+    const node = ensureParent(mc.title, mc.slug, mc.img, mc._id);
+    node.isMain = true;
+  });
+
   /* ---- Step 0: Sanity cats classify — kaun parent, kaun kisi aur ki sub ---- */
   const goodCats = (cats || []).filter(
     (c) => c?.title && !isJunk((c.title || "").toLowerCase())
@@ -160,17 +177,40 @@ function buildTree(cats: Cat[], subDocs: SubDoc[], prods: Prod[]): ParentNode[] 
   const subCats: { c: Cat; parentSlug?: string; parentTitle?: string }[] = [];
 
   goodCats.forEach((c) => {
+    /* ✅ NAYA: category kisi MAIN CATEGORY me attached hai —
+       main node ke dropdown me add karo (category apna parent node
+       bhi banegi taake uske sub-categories pehle jaise hi kaam karen) */
+    if (c.mainId) {
+      const mNode = Array.from(parents.values()).find((v) => v._id && v._id === c.mainId);
+      if (mNode) {
+        const sKey = norm(c.title);
+        if (!mNode.subs.find((x) => x.key === sKey)) {
+          mNode.subs.push({
+            key: sKey,
+            name: c.title,
+            slug: c.slug || slugify(c.title),
+            img: c.img,
+            count: 0,
+          });
+        }
+      }
+    }
+
     const t = norm(c.title);
     let subOf: { parentSlug?: string; parentTitle?: string } | null = null;
-    for (const p of prods || []) {
-      const s = norm(p.subCategory);
-      if (!s) continue;
-      const same = s === t || (t.length >= 4 && s.includes(t)) || (s.length >= 4 && t.includes(s));
-      if (!same) continue;
-      const pCat = norm(p.category);
-      const selfCat =
-        pCat && (pCat === t || norm(p.catSlug) === norm(c.slug) || pCat.includes(t) || t.includes(pCat));
-      if (!selfCat) { subOf = { parentSlug: p.catSlug, parentTitle: p.category }; break; }
+    /* mainId wali categories ko heuristic se classify na karo —
+       wo khud parent node banengi (explicit link > guess) */
+    if (!c.mainId) {
+      for (const p of prods || []) {
+        const s = norm(p.subCategory);
+        if (!s) continue;
+        const same = s === t || (t.length >= 4 && s.includes(t)) || (s.length >= 4 && t.includes(s));
+        if (!same) continue;
+        const pCat = norm(p.category);
+        const selfCat =
+          pCat && (pCat === t || norm(p.catSlug) === norm(c.slug) || pCat.includes(t) || t.includes(pCat));
+        if (!selfCat) { subOf = { parentSlug: p.catSlug, parentTitle: p.category }; break; }
+      }
     }
     if (subOf) subCats.push({ c, parentSlug: subOf.parentSlug, parentTitle: subOf.parentTitle });
     else ensureParent(c.title, c.slug || slugify(c.title), c.img, c._id);
@@ -235,6 +275,26 @@ function buildTree(cats: Cat[], subDocs: SubDoc[], prods: Prod[]): ParentNode[] 
     if (!sub.img && p.image) sub.img = p.image;
   });
 
+  /* ---- ✅ NAYA Step 4: MAIN groups me group ke saare products bharo ---- */
+  Array.from(parents.values())
+    .filter((v) => v.isMain)
+    .forEach((m) => {
+      const childSlugs = m.subs.map((s) => norm(s.slug));
+      const childKeys = m.subs.map((s) => s.key);
+      const agg = (prods || []).filter((p) => {
+        const cs = norm(p.catSlug);
+        const cn = norm(p.category);
+        return (!!cs && childSlugs.includes(cs)) || (!!cn && childKeys.includes(cn));
+      });
+      const have = new Set(m.prods.map((p) => p._id));
+      m.prods = [...m.prods, ...agg.filter((p) => !have.has(p._id))];
+      m.subs.forEach((s) => {
+        s.count = m.prods.filter(
+          (p) => norm(p.catSlug) === norm(s.slug) || norm(p.category) === s.key
+        ).length;
+      });
+    });
+
   /* finalize */
   const arr = Array.from(parents.values());
   arr.forEach((v) => {
@@ -249,6 +309,7 @@ function buildTree(cats: Cat[], subDocs: SubDoc[], prods: Prod[]): ParentNode[] 
 /* ============================================================
    GROQ — ek hi query me sab kuch (categories + subcategories + products)
    ✅ "createdAt": _createdAt — date sort ke liye
+   ✅ v7: mainCats query + cats me mainId/mainTitle/mainSlug
 ============================================================ */
 const PRODUCT_FIELDS = `
   _id, title, "slug": slug.current, price, oldPrice, condition, conditionScore,
@@ -264,8 +325,14 @@ const PRODUCT_FIELDS = `
 `;
 
 const SHOP_QUERY = `{
-  "cats": *[_type == "category"] | order(coalesce(order, 9999) asc, title asc) {
+  "mainCats": *[_type == "mainCategory"] | order(coalesce(order, 9999) asc, title asc) {
     _id, title, "slug": slug.current, "img": image.asset->url
+  },
+  "cats": *[_type == "category"] | order(coalesce(order, 9999) asc, title asc) {
+    _id, title, "slug": slug.current, "img": image.asset->url,
+    "mainId": mainCategory->_id,
+    "mainTitle": mainCategory->title,
+    "mainSlug": mainCategory->slug.current
   },
   "subs": *[_type == "subcategory"] | order(title asc) {
     _id, title, "slug": slug.current, "img": image.asset->url,
@@ -463,69 +530,6 @@ function SliderSection({ title, items, viewAllSlug, onOpen }: {
   );
 }
 
-/* ============================================================
-   ✅ NAV ITEM — main category + uska SUB-CATEGORIES dropdown
-   Desktop: hover se dropdown khulta hai | Mobile: click → category
-   khulti hai aur wahan sub-chips row milti hai
-============================================================ */
-function NavItem({ node, active, onOpen }: {
-  node: ParentNode; active: string; onOpen: (slug: string) => void;
-}) {
-  const isActive = !!active && (active === node.slug || node.subs.some((s) => s.slug === active));
-
-  return (
-    <span className="group relative flex items-center">
-      <span className="mx-3 h-4 w-px shrink-0 bg-gray-300 dark:bg-[#1E3A52]" aria-hidden="true" />
-      <button
-        onClick={() => onOpen(node.slug)}
-        className={`relative shrink-0 px-1 py-2 text-sm font-semibold tracking-wide transition-colors duration-300 ${
-          isActive
-            ? "text-[#F5A623]"
-            : "text-gray-700 hover:text-[#F5A623] dark:text-gray-300 dark:hover:text-white"
-        }`}
-      >
-        {node.name}
-        {node.subs.length > 0 && (
-          <svg className="ml-1 inline h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6 9l6 6 6-6" />
-          </svg>
-        )}
-        <span className={`absolute inset-x-0 -bottom-0.5 h-[2px] origin-left rounded-full bg-gradient-to-r from-[#F5A623] to-[#FFB94D] transition-transform duration-300 ${
-          isActive ? "scale-x-100" : "scale-x-0"
-        }`} />
-      </button>
-
-      {/* ✅ SUB-CATEGORIES DROPDOWN */}
-      {node.subs.length > 0 && (
-        <span className="absolute left-0 top-full z-40 hidden pt-1 group-hover:block group-focus-within:block">
-          <span className="block max-h-80 min-w-56 overflow-y-auto rounded-xl border border-gray-200 bg-white py-2 shadow-2xl dark:border-[#1E3A52] dark:bg-[#112240]">
-            <button
-              onClick={() => onOpen(node.slug)}
-              className="flex w-full items-center justify-between gap-6 px-4 py-2 text-left text-[11px] font-black uppercase tracking-widest text-[#F5A623] hover:bg-amber-50 dark:hover:bg-[#0D1F30]"
-            >
-              Sab {node.name}
-            </button>
-            {node.subs.map((s) => (
-              <button
-                key={s.key}
-                onClick={() => onOpen(s.slug)}
-                className={`flex w-full items-center justify-between gap-6 px-4 py-2 text-left text-xs font-semibold transition ${
-                  active === s.slug
-                    ? "bg-amber-50 text-[#F5A623] dark:bg-[#0D1F30]"
-                    : "text-gray-700 hover:bg-amber-50 hover:text-[#F5A623] dark:text-gray-300 dark:hover:bg-[#0D1F30] dark:hover:text-[#F5A623]"
-                }`}
-              >
-                <span className="truncate">{s.name}</span>
-                <span className="shrink-0 text-[10px] text-gray-400">{s.count}</span>
-              </button>
-            ))}
-          </span>
-        </span>
-      )}
-    </span>
-  );
-}
-
 /* ================= SOCIAL PAGES ================= */
 function SocialPages() {
   return (
@@ -621,34 +625,54 @@ function SocialPages() {
 }
 
 /* ============================================================
-   SHOP CONTENT ✅ v6 — SEO/SSR FIX
-   - ✅ FAULT FIXED: pehle `if (loading) return skeleton` tha — server
-     ko sirf khali skeleton jata tha, H1/hero/products crawlers ko
-     nazar nahi aate the (Bing: "H1 missing" isi wajah se aaya tha).
-   - Ab poora page structure (navbar + hero + H1) HAMESHA server se
+   SHOP CONTENT ✅ v11 — URL WATCHER (secondary navbar fix)
+   - ✅ v11: ?cat= / ?q= URL changes ab LIVE track hote hain.
+     Pehle ?cat= sirf FIRST LOAD pe parha jata tha — isi liye shop
+     page pe ho aur secondary navbar se doosri category click karo
+     to page nahi badalta tha. Ab har URL change pe page TURANT us
+     category pe khulta hai. openCat ab URL bhi sync karta hai
+     (replaceState — navigation nahi, instant).
+   - ✅ v10: andar wali sticky CATEGORY NAVBAR (All Parts + NavItem
+     dropdowns) REMOVE — ab sirf global Navbar ka SecondaryNav hai
+     (jo isi style me banaya gaya hai). Double navbar khatam.
+   - ✅ v9: main page ki attached categories ab SLIDER STYLE me —
+     arrows (desktop) + swipe (mobile), New Arrivals jaisa hi system.
+   - ✅ v8: Main Category card click → USKA APNA PAGE khulta hai:
+     New Arrivals / Hot Deals / Main Categories section hidden.
+     SIRF wo categories nazar aati hain jo us main category me
+     attached hain. Toggle: Categories | All Products.
+   - ✅ v7: "Main Categories" section — New Arrivals + Hot Deals
+     ke NICHE, Products se UPAR. Badi cards (image + naam + count).
+   - ✅ v6: poora page structure (hero + H1) HAMESHA server se
      render hota hai. Sirf product cards loading me pulse karte hain.
-   - Baqi sab v5 jaisa: sort dropdown, category-wise sliders, navbar
-     dropdowns, chips, brand filter, social pages.
+   - Baqi sab: sort dropdown, category-wise sliders, sub-chips,
+     brand filter, social pages.
 ============================================================ */
 export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
   const [active, setActive] = useState(initialCat);
   const [query, setQuery] = useState(initialQ);
   const [brandFilter, setBrandFilter] = useState("");
   const [sortBy, setSortBy] = useState<SortMode>("newest");
+  /* ✅ v8: MAIN CATEGORY PAGE — "cats" = sirf attached categories ka
+     grid | "prods" = group ke saare products. Default: categories. */
+  const [mainTab, setMainTab] = useState<"cats" | "prods">("cats");
+  const [mainCats, setMainCats] = useState<MainCat[]>([]);
   const [cats, setCats] = useState<Cat[]>([]);
   const [subDocs, setSubDocs] = useState<SubDoc[]>([]);
   const [prods, setProds] = useState<Prod[]>([]);
   const [loading, setLoading] = useState(true);
   const featuredRef = useRef<HTMLDivElement>(null);
   const arrivalsRef = useRef<HTMLDivElement>(null);
+  const mainCatsRef = useRef<HTMLDivElement>(null); /* ✅ v9: main page categories slider */
 
-  /* ✅ SELF FETCH — cats + subs + products ek hi query me */
+  /* ✅ SELF FETCH — mainCats + cats + subs + products ek hi query me */
   useEffect(() => {
     let alive = true;
     client
-      .fetch<{ cats: Cat[]; subs: SubDoc[]; prods: Prod[] }>(SHOP_QUERY)
+      .fetch<{ mainCats: MainCat[]; cats: Cat[]; subs: SubDoc[]; prods: Prod[] }>(SHOP_QUERY)
       .then((d) => {
         if (!alive) return;
+        setMainCats(d?.mainCats || []);
         setCats(d?.cats || []);
         setSubDocs(d?.subs || []);
         setProds(d?.prods || []);
@@ -658,8 +682,44 @@ export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
     return () => { alive = false; };
   }, []);
 
-  /* ✅ TREE — parents + subs */
-  const tree = useMemo(() => buildTree(cats, subDocs, prods), [cats, subDocs, prods]);
+  /* ✅ v11: URL WATCHER — secondary navbar se category click karo to
+     URL (?cat= / ?q=) badalta hai lekin component re-mount nahi hota
+     (same /shop route). Pehle ?cat= sirf mount pe liya jata tha —
+     isi liye navbar se category click karne par page nahi badalta tha.
+     Ab: URL change detect hote hi page turant us category pe khulta hai.
+     - openCat (page ke andar clicks) URL replaceState se sync karta hai
+     - navbar / koi bhi Link navigation → watcher pakar leta hai
+     - 250ms poll + popstate — Suspense/useSearchParams ki zaroorat nahi */
+  const urlRef = useRef<{ cat: string; q: string }>({ cat: initialCat || "", q: initialQ || "" });
+  useEffect(() => {
+    const readUrl = () => {
+      try {
+        const sp = new URLSearchParams(window.location.search);
+        const c = sp.get("cat") || "";
+        const q = sp.get("q") || "";
+        if (c === urlRef.current.cat && q === urlRef.current.q) return;
+        urlRef.current = { cat: c, q };
+        setActive(c);
+        setQuery(q);
+        setMainTab("cats");
+        try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { /* noop */ }
+      } catch { /* noop */ }
+    };
+    readUrl();
+    const t = window.setInterval(readUrl, 250);
+    window.addEventListener("popstate", readUrl);
+    return () => {
+      window.clearInterval(t);
+      window.removeEventListener("popstate", readUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* ✅ TREE — main groups + parents + subs */
+  const tree = useMemo(() => buildTree(cats, subDocs, prods, mainCats), [cats, subDocs, prods, mainCats]);
+
+  /* ✅ NAYA: MAIN category nodes — section ke cards ke liye */
+  const mainNodes = useMemo(() => tree.filter((n) => n.isMain), [tree]);
 
   /* slug → node index (parent ya sub dono) */
   const index = useMemo(() => {
@@ -686,6 +746,13 @@ export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
   const activeName = found ? (found.kind === "parent" ? found.parent.name : found.sub!.name) : "";
   const activeImg = found ? (found.kind === "parent" ? found.parent.img : found.sub!.img) : undefined;
 
+  /* ✅ v8: MAIN CATEGORY PAGE — jab koi MAIN category open ho to uska
+     apna page banta hai: SIRF wo categories nazar aati hain jo usme
+     attached hain (buildTree inhe m.subs me rakhta hai). Search ya
+     brand filter chalu ho to automatically products view par switch. */
+  const isMainOpen = !!found && found.kind === "parent" && found.parent.isMain;
+  const mainCatsTab = isMainOpen && mainTab === "cats" && !query.trim() && !brandFilter;
+
   /* Available brands */
   const availableBrands = useMemo(() => {
     const set = new Set<string>();
@@ -707,11 +774,17 @@ export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
   const filtered = useMemo(() => {
     let list = prods;
     if (found) {
-      const slug = found.kind === "parent" ? found.parent.slug : found.sub!.slug;
-      const name = found.kind === "parent" ? found.parent.name : found.sub!.name;
-      let m = prods.filter((p) => prodInCat(p, slug, name));
-      if (m.length === 0) m = prods.filter((p) => prodInCatLoose(p, slug, name));
-      list = m;
+      if (found.kind === "parent" && found.parent.isMain) {
+        /* ✅ NAYA: MAIN CATEGORY — group ke saare products
+           (buildTree ne pehle hi aggregate kar rakhe hain) */
+        list = found.parent.prods;
+      } else {
+        const slug = found.kind === "parent" ? found.parent.slug : found.sub!.slug;
+        const name = found.kind === "parent" ? found.parent.name : found.sub!.name;
+        let m = prods.filter((p) => prodInCat(p, slug, name));
+        if (m.length === 0) m = prods.filter((p) => prodInCatLoose(p, slug, name));
+        list = m;
+      }
     }
     const q = query.trim().toLowerCase();
     if (q) {
@@ -729,12 +802,13 @@ export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
   /* ✅ SORTED — dropdown ke mutabiq */
   const sortedFiltered = useMemo(() => sortProds(filtered, sortBy), [filtered, sortBy]);
 
-  /* ✅ CATEGORY-WISE SECTIONS — All view ke liye (har category ka apna slider) */
+  /* ✅ CATEGORY-WISE SECTIONS — All view ke liye (har category ka apna slider)
+     ✅ v7: MAIN groups yahan nahi — unka apna section upar hai */
   const groupedSections = useMemo(
     () =>
       tree
         .map((node) => ({ node, items: sortProds(node.prods, sortBy) }))
-        .filter((s) => s.items.length > 0),
+        .filter((s) => s.items.length > 0 && !s.node.isMain),
     [tree, sortBy]
   );
 
@@ -756,6 +830,17 @@ export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
 
   const openCat = (slug: string) => {
     setActive(slug);
+    setMainTab("cats"); /* ✅ v8: har naye open pe categories view default */
+    /* ✅ v11: URL bhi sync — page ke andar clicks (chips/cards) se URL
+       aur navbar ka active state hamesha match rahen. replaceState =
+       navigation nahi hoti, instant update, Next 14.1+ official pattern. */
+    try {
+      window.history.replaceState(
+        window.history.state,
+        "",
+        slug ? `/shop?cat=${encodeURIComponent(slug)}` : "/shop"
+      );
+    } catch { /* noop */ }
     try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { /* noop */ }
   };
 
@@ -772,36 +857,10 @@ export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0A1929]">
 
-      {/* ===== 1. CATEGORY NAVBAR — parents + sub dropdowns ===== */}
-      <div className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 backdrop-blur dark:border-[#1E3A52] dark:bg-[#0A1929]/95">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center px-4 py-3">
+      {/* ✅ v10: andar wali CATEGORY NAVBAR hata di — ab upar global
+          Navbar ka SecondaryNav (isi style me) ye kaam karta hai */}
 
-          <button
-            onClick={() => openCat("")}
-            className={`relative shrink-0 px-1 py-2 text-sm font-semibold tracking-wide transition-colors duration-300 ${
-              !active
-                ? "text-[#F5A623]"
-                : "text-gray-700 hover:text-[#F5A623] dark:text-gray-300 dark:hover:text-white"
-            }`}
-          >
-            All Parts
-            <span className={`absolute inset-x-0 -bottom-0.5 h-[2px] origin-left rounded-full bg-gradient-to-r from-[#F5A623] to-[#FFB94D] transition-transform duration-300 ${
-              !active ? "scale-x-100" : "scale-x-0"
-            }`} />
-          </button>
-
-          {/* ✅ HAR MAIN CATEGORY — sath me sub-categories dropdown (loading me pulse pills) */}
-          {loading
-            ? [0, 1, 2, 3, 4].map((i) => (
-                <span key={i} className="mx-2 h-5 w-16 animate-pulse rounded-full bg-gray-200 dark:bg-[#1E3A52]" />
-              ))
-            : tree.map((node) => (
-                <NavItem key={node.key} node={node} active={active} onOpen={openCat} />
-              ))}
-        </div>
-      </div>
-
-      {/* ===== 2. HERO BANNER — ✅ v6: ye H1 ab hamesha server HTML me jata hai ===== */}
+      {/* ===== 1. HERO BANNER — ✅ v6: ye H1 ab hamesha server HTML me jata hai ===== */}
       <section className="relative overflow-hidden">
         {activeImg && (
           <img src={wm(activeImg, 1200, 70)} alt={`${activeName} used auto parts — AutoBrothers Pakistan`}
@@ -861,8 +920,10 @@ export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
         </div>
       </section>
 
-      {/* ===== 2.5 SUB-CATEGORY CHIPS — jab koi category/sub active ho ===== */}
-      {activeParent && activeParent.subs.length > 0 && (
+      {/* ===== 1.5 SUB-CATEGORY CHIPS — jab koi category/sub/main active ho =====
+          ✅ v8: MAIN page ke categories view me chips hidden — wahan badi
+          category cards hain, chips sirf products view me dikhte hain */}
+      {activeParent && activeParent.subs.length > 0 && !mainCatsTab && (
         <div className="mx-auto max-w-6xl px-4 pt-6">
           <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-gray-200 bg-white p-3 dark:border-[#1E3A52] dark:bg-[#112240]">
             <span className="mr-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
@@ -883,7 +944,7 @@ export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
         </div>
       )}
 
-      {/* ===== 2.6 BRAND FILTER BAR ===== */}
+      {/* ===== 1.6 BRAND FILTER BAR ===== */}
       {availableBrands.length > 0 && (
         <div className="mx-auto max-w-6xl px-4 pt-6">
           <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-gray-200 bg-white p-3 dark:border-[#1E3A52] dark:bg-[#112240]">
@@ -909,8 +970,8 @@ export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
         </div>
       )}
 
-      {/* ===== 3. NEW ARRIVALS ===== */}
-      {newArrivals.length > 0 && (
+      {/* ===== 2. NEW ARRIVALS — ✅ v8: MAIN page pe hidden (uska apna page hai) ===== */}
+      {newArrivals.length > 0 && !isMainOpen && (
         <section className="mx-auto max-w-6xl px-4 py-8">
           <SectionHead tag="Latest" title="New Arrivals" showArrows
             onPrev={() => scroll(arrivalsRef, -1)} onNext={() => scroll(arrivalsRef, 1)} />
@@ -925,8 +986,8 @@ export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
         </section>
       )}
 
-      {/* ===== 4. FEATURED SLIDER ===== */}
-      {featured.length > 0 && (
+      {/* ===== 3. FEATURED SLIDER — ✅ v8: MAIN page pe hidden ===== */}
+      {featured.length > 0 && !isMainOpen && (
         <section className="bg-white py-8 dark:bg-[#0D1F30]/60">
           <div className="mx-auto max-w-6xl px-4">
             <SectionHead tag="Featured" title="Hot Deals" showArrows
@@ -943,10 +1004,71 @@ export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
         </section>
       )}
 
-      {/* ===== 5. PRODUCTS — SORT DROPDOWN + CATEGORY-WISE SLIDERS ===== */}
+      {/* ===== 3.5 ✅ MAIN CATEGORIES — New Arrivals + Hot Deals ke NICHE =====
+          ✅ v8: jab khud koi main category open ho to ye section hidden —
+          warna page ke andar wahi section dobara nazar aata */}
+      {mainNodes.length > 0 && !isMainOpen && (
+        <section className="mx-auto max-w-6xl px-4 py-8">
+          <SectionHead tag="Categories" title="Main Categories" />
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            {mainNodes.map((m) => (
+              <button
+                key={m.key}
+                onClick={() => openCat(m.slug)}
+                className="group overflow-hidden rounded-2xl border border-gray-200 bg-white text-left transition-all duration-300 hover:border-[#F5A623] hover:shadow-lg dark:border-[#1E3A52] dark:bg-[#112240]"
+              >
+                <div className="aspect-[16/9] w-full overflow-hidden bg-gray-100 dark:bg-[#0D1F30]">
+                  {m.img ? (
+                    <img
+                      src={wm(m.img, 600, 70)}
+                      alt={`${m.name} — used auto parts Pakistan`}
+                      loading="lazy"
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#13293D] to-[#0A1929]">
+                      <span className="text-4xl font-black text-[#F5A623]">
+                        {m.name.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-2 border-t border-gray-100 p-3 dark:border-[#1E3A52]">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black text-slate-900 transition group-hover:text-[#F5A623] dark:text-white">
+                      {m.name}
+                    </p>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                      {m.prods.length > 0 ? `${m.prods.length} products` : "Coming soon"}
+                    </p>
+                  </div>
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-50 text-[#F5A623] transition group-hover:bg-[#F5A623] group-hover:text-white dark:bg-[#F5A623]/10">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ===== 4. PRODUCTS — SORT DROPDOWN + CATEGORY-WISE SLIDERS ===== */}
       <section id="products" className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
+            {/* ✅ v8: MAIN page pe breadcrumb — wapis All Parts pe jao */}
+            {isMainOpen && (
+              <p className="mb-1 flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                <button onClick={() => openCat("")}
+                  className="font-bold text-[#F5A623] hover:underline">
+                  Shop
+                </button>
+                <span>/</span>
+                <span className="font-semibold text-gray-700 dark:text-gray-300">{activeName}</span>
+              </p>
+            )}
             {/* ✅ SUB pe breadcrumb */}
             {found?.kind === "sub" && activeParent && (
               <p className="mb-1 flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
@@ -965,22 +1087,27 @@ export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
             <p className="text-xs text-gray-500 dark:text-gray-400">
               {loading
                 ? "Loading products…"
+                : mainCatsTab
+                ? `${activeParent?.subs.length || 0} categories — card pe click karo`
                 : <>{query ? `"${query}" — ` : ""}{filtered.length} products</>}
             </p>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* ✅ SORT DROPDOWN — date / price low-high / price high-low */}
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortMode)}
-              aria-label="Sort products"
-              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-700 outline-none transition focus:border-[#F5A623] dark:border-[#1E3A52] dark:bg-[#13293D] dark:text-gray-300"
-            >
-              <option value="newest">Sort: Newest First</option>
-              <option value="price-asc">Sort: Price — Low to High</option>
-              <option value="price-desc">Sort: Price — High to Low</option>
-            </select>
+            {/* ✅ SORT DROPDOWN — date / price low-high / price high-low
+                ✅ v8: categories view me sort ki zaroorat nahi */}
+            {!mainCatsTab && (
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortMode)}
+                aria-label="Sort products"
+                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-700 outline-none transition focus:border-[#F5A623] dark:border-[#1E3A52] dark:bg-[#13293D] dark:text-gray-300"
+              >
+                <option value="newest">Sort: Newest First</option>
+                <option value="price-asc">Sort: Price — Low to High</option>
+                <option value="price-desc">Sort: Price — High to Low</option>
+              </select>
+            )}
 
             {(active || query || brandFilter) && (
               <button onClick={() => { openCat(""); setQuery(""); setBrandFilter(""); }}
@@ -991,6 +1118,32 @@ export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
           </div>
         </div>
 
+        {/* ✅ v8: MAIN CATEGORY PAGE — Categories / All Products toggle */}
+        {isMainOpen && !loading && (
+          <div className="mb-6 inline-flex overflow-hidden rounded-xl border border-gray-200 bg-white p-1 dark:border-[#1E3A52] dark:bg-[#112240]">
+            <button
+              onClick={() => setMainTab("cats")}
+              className={`rounded-lg px-4 py-2 text-xs font-black transition ${
+                mainCatsTab
+                  ? "bg-[#F5A623] text-white shadow"
+                  : "text-gray-600 hover:text-[#F5A623] dark:text-gray-400 dark:hover:text-white"
+              }`}
+            >
+              📂 Categories ({activeParent?.subs.length || 0})
+            </button>
+            <button
+              onClick={() => setMainTab("prods")}
+              className={`rounded-lg px-4 py-2 text-xs font-black transition ${
+                !mainCatsTab
+                  ? "bg-[#F5A623] text-white shadow"
+                  : "text-gray-600 hover:text-[#F5A623] dark:text-gray-400 dark:hover:text-white"
+              }`}
+            >
+              🛒 All Products ({activeParent?.prods.length || 0})
+            </button>
+          </div>
+        )}
+
         {loading ? (
           /* ✅ v6: loading me bhi page ka structure server se aata hai —
              sirf cards pulse karte hain (pehle POORA page skeleton tha) */
@@ -999,6 +1152,95 @@ export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
               <div key={i} className="h-56 animate-pulse rounded-2xl bg-gray-100 dark:bg-[#13293D]" />
             ))}
           </div>
+        ) : mainCatsTab ? (
+          /* ============================================================
+             ✅ v8: MAIN CATEGORY PAGE — SIRF wo categories nazar aati hain
+             jo is main category me ATTACHED hain (Sanity me category ke
+             andar Main Category field select kiya gaya ho).
+             Card click → us category ke products khulte hain.
+             ============================================================ */
+          (activeParent?.subs.length ?? 0) === 0 ? (
+            <div className="rounded-2xl bg-white py-14 text-center ring-1 ring-gray-100 dark:bg-[#112240] dark:ring-[#1E3A52]">
+              <p className="text-sm font-bold text-slate-700 dark:text-white">
+                Is main category me abhi koi category attach nahi hui
+              </p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Sanity me category kholo → "Main Category" field me ye select karo → Publish.
+              </p>
+              <button
+                onClick={() => setMainTab("prods")}
+                className="mt-5 rounded-xl bg-[#F5A623] px-6 py-2.5 text-sm font-bold text-white transition hover:bg-[#D4911E]"
+              >
+                Saare Products Dekho
+              </button>
+            </div>
+          ) : (
+            <div>
+              {/* ✅ v9: Slider header — arrows (desktop) */}
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                  Category card pe click karo — uske products khulenge
+                </p>
+                <div className="hidden gap-2 sm:flex">
+                  <button onClick={() => scroll(mainCatsRef, -1)} aria-label="Previous"
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-gray-600 shadow-sm ring-1 ring-gray-200 transition hover:bg-amber-50 hover:text-[#F5A623] dark:bg-[#112240] dark:text-gray-400 dark:ring-[#1E3A52] dark:hover:text-[#F5A623]">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                  </button>
+                  <button onClick={() => scroll(mainCatsRef, 1)} aria-label="Next"
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-gray-600 shadow-sm ring-1 ring-gray-200 transition hover:bg-amber-50 hover:text-[#F5A623] dark:bg-[#112240] dark:text-gray-400 dark:ring-[#1E3A52] dark:hover:text-[#F5A623]">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* ✅ v9: Categories SLIDER — swipe (mobile) + snap */}
+              <div
+                ref={mainCatsRef}
+                className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
+                {(activeParent?.subs || []).map((s) => (
+                  <div key={s.key} className="w-56 shrink-0 snap-start sm:w-64">
+                    <button
+                      onClick={() => openCat(s.slug)}
+                      className="group block h-full w-full overflow-hidden rounded-2xl border border-gray-200 bg-white text-left transition-all duration-300 hover:border-[#F5A623] hover:shadow-lg dark:border-[#1E3A52] dark:bg-[#112240]"
+                    >
+                      <div className="aspect-[4/3] w-full overflow-hidden bg-gray-100 dark:bg-[#0D1F30]">
+                        {s.img ? (
+                          <img
+                            src={wm(s.img, 600, 70)}
+                            alt={`${s.name} — used auto parts Pakistan`}
+                            loading="lazy"
+                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#13293D] to-[#0A1929]">
+                            <span className="text-4xl font-black text-[#F5A623]">
+                              {s.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between gap-2 border-t border-gray-100 p-3 dark:border-[#1E3A52]">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-black text-slate-900 transition group-hover:text-[#F5A623] dark:text-white">
+                            {s.name}
+                          </p>
+                          <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                            {s.count > 0 ? `${s.count} products` : "View parts"}
+                          </p>
+                        </div>
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-50 text-[#F5A623] transition group-hover:bg-[#F5A623] group-hover:text-white dark:bg-[#F5A623]/10">
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </span>
+                      </div>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
         ) : filtered.length === 0 ? (
           <>
             <div className="rounded-2xl bg-white py-14 text-center ring-1 ring-gray-100 dark:bg-[#112240] dark:ring-[#1E3A52]">
@@ -1009,7 +1251,7 @@ export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
             {/* ✅ Suggested — page kabhi khali na lage */}
             {suggested.length > 0 && (
               <div className="mt-8">
-                <p className="mb-3 text-xs font-black uppercase tracking-widest text-[#F5A623]">Suggested Products</p>
+                <SectionHead tag="Try These" title="Aapko Ye Pasand Aayenge" />
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
                   {suggested.map((p) => (
                     <ProductCard key={p._id} p={p} />
@@ -1019,7 +1261,7 @@ export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
             )}
           </>
         ) : groupedView ? (
-          /* ✅ ALL VIEW — har category ka apna SLIDER (New Arrivals jaisa) */
+          /* ✅ ALL VIEW — har category ka apna slider (Main groups chhod kar) */
           <>
             {groupedSections.map(({ node, items }) => (
               <SliderSection
@@ -1030,14 +1272,12 @@ export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
                 onOpen={openCat}
               />
             ))}
-
-            {/* Jinki koi category nahi bani */}
             {otherItems.length > 0 && (
               <SliderSection title="Other Parts" items={otherItems} />
             )}
           </>
         ) : (
-          /* ✅ FILTERED VIEW — category/search/brand active: flat grid (sorted) */
+          /* ✅ FILTERED VIEW — flat grid (sort dropdown ke sath) */
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {sortedFiltered.map((p) => (
               <ProductCard key={p._id} p={p} />
@@ -1046,7 +1286,7 @@ export default function ShopContent({ initialCat = "", initialQ = "" }: Props) {
         )}
       </section>
 
-      {/* ===== 6. SOCIAL PAGES ===== */}
+      {/* ===== 5. SOCIAL PAGES ===== */}
       <SocialPages />
     </div>
   );

@@ -8,6 +8,26 @@ import VehicleSelector from "./VehicleSelector";
 import { Car, ChevronRight } from "lucide-react";
 
 /* ============================================================
+   HOME CONTENT ✅ v4 — FEATURED UPAR + SHOP WAALA PRODUCT CARD
+   ------------------------------------------------------------
+   ✅ 1. Featured Products ab NEW ARRIVALS ke NEECHE (upar shift)
+   ✅ 2. ProductCard bilkul ShopContent wala: white card +
+        image top (object-contain) + brand + price/oldPrice
+        discount + WhatsApp cart icon + "View Product" button
+        — home aur shop pe SAME look
+   ✅ 3. Saare sliders MOBILE FRIENDLY: swipe + snap scroll,
+        arrows sirf desktop pe (hidden sm:flex)
+   ✅ 4. Main Categories (News ke neeche) — slide style
+   ✅ 5. Shop by Category — har main category ki slide row +
+        attached categories slider + Other Categories fallback;
+        agar Sanity me mainCategory attach hi na ho to purana
+        flat grid (khali section kabhi nahi dikhega)
+   ✅ 6. Blog fixes: slug na ho to post skip, image na ho to
+        placeholder, khali hone par section hide (skeleton
+        hamesha nahi ghoomega)
+============================================================ */
+
+/* ============================================================
    TYPES
 ============================================================ */
 type Prod = {
@@ -15,10 +35,17 @@ type Prod = {
   price?: string | number; oldPrice?: string | number;
   image?: string; condition?: string; conditionScore?: number;
   mileage?: string; warranty?: number; qualityChecked?: boolean;
-  japanImported?: boolean; model?: string; newArrival?: boolean;
+  japanImported?: boolean; model?: string; brand?: string;
+  partNumber?: string; featured?: boolean; newArrival?: boolean;
+  inStock?: boolean; description?: string;
+  createdAt?: string;
   category?: string; catSlug?: string; subCategory?: string; subSlug?: string;
 };
-type Cat = { _id: string; title: string; slug: string; img?: string };
+type Cat = {
+  _id: string; title: string; slug: string; img?: string;
+  mainId?: string; mainTitle?: string; mainSlug?: string;
+};
+type MainCat = { _id: string; title: string; slug: string; img?: string };
 type SubDoc = {
   _id: string; title: string; slug?: string; img?: string;
   parentId?: string; parentTitle?: string; parentSlug?: string;
@@ -34,8 +61,8 @@ type ParentNode = {
 ============================================================ */
 const WA_NUMBER = "923222806245"; // ✅ apna number
 
-/* ✅ WATERMARK helper — har external image (Sanity/ImgBB) is route se guzar kar
-   aati hai, server par "autobrothers.pk" bake hota hai (save karo to bhi sath) */
+/* ✅ WATERMARK helper — har external image /api/watermark route se guzar kar
+   aati hai, server par "autobrothers.pk" bake hota hai */
 const wmSrc = (url: string, w: number, q: number) =>
   `/api/watermark?src=${encodeURIComponent(url)}&w=${w}&q=${q}`;
 
@@ -50,13 +77,6 @@ const titleCase = (s?: string) =>
 
 const JUNK = ["test", "delete", "demo", "sample", "dummy", "asdf", "check", "us news"];
 const isJunk = (t: string) => JUNK.some((j) => t.includes(j));
-
-/* ✅ Condition → Score (ProductCard jaisa hi) */
-const scoreMap: Record<string, number> = { Good: 8, Average: 6, Bad: 3 };
-const getScore = (p: any): number =>
-  typeof p?.conditionScore === "number" && p.conditionScore > 0
-    ? p.conditionScore
-    : (scoreMap[p?.condition] ?? 0);
 
 /* ============================================================
    ✅ CATEGORY TREE BUILDER — main categories + sub-categories
@@ -200,11 +220,14 @@ function buildTree(cats: Cat[], subDocs: SubDoc[], prods: Prod[]): ParentNode[] 
 }
 
 /* ============================================================
-   GROQ — product fields (shared)
+   GROQ — product fields (ShopContent jaise hi fields)
 ============================================================ */
 const PRODUCT_FIELDS = `
   _id, title, "slug": slug.current, price, oldPrice, condition, conditionScore,
-  mileage, warranty, qualityChecked, japanImported, model, newArrival,
+  mileage, warranty, qualityChecked, japanImported, model,
+  "brand": coalesce(brand->title, brand),
+  partNumber, featured, newArrival, inStock, description,
+  "createdAt": _createdAt,
   "image": images[0].asset->url,
   "subCategory": subcategory->title,
   "subSlug": subcategory->slug.current,
@@ -212,8 +235,15 @@ const PRODUCT_FIELDS = `
   "catSlug": subcategory->parentCategory->slug.current
 `;
 
-const CATS_QUERY = `*[_type == "category"] | order(coalesce(order, 9999) asc, title asc) {
+const MAIN_CATS_QUERY = `*[_type == "mainCategory"] | order(coalesce(order, 9999) asc, title asc) {
   _id, title, "slug": slug.current, "img": image.asset->url
+}`;
+
+const CATS_QUERY = `*[_type == "category"] | order(coalesce(order, 9999) asc, title asc) {
+  _id, title, "slug": slug.current, "img": image.asset->url,
+  "mainId": mainCategory->_id,
+  "mainTitle": mainCategory->title,
+  "mainSlug": mainCategory->slug.current
 }`;
 
 const SUBS_QUERY = `*[_type == "subcategory"] | order(title asc) {
@@ -242,10 +272,14 @@ function SectionHead({ emoji, title, sub, href }: { emoji?: string; title: strin
   );
 }
 
-function Empty({ text }: { text: string }) {
+/* ---------- ✅ SLIDER ARROWS — sirf desktop (mobile pe swipe hai) ---------- */
+function SliderArrows({ onPrev, onNext }: { onPrev: () => void; onNext: () => void }) {
   return (
-    <div className="rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50 py-10 text-center dark:border-[#1E3A52] dark:bg-[#0D1F30]/50">
-      <p className="text-sm text-gray-500">{text}</p>
+    <div className="hidden shrink-0 gap-2 pb-1 sm:flex">
+      <button onClick={onPrev} aria-label="Previous"
+        className="flex h-10 w-10 items-center justify-center rounded-full bg-white ring-1 ring-gray-200 shadow-sm transition hover:bg-amber-50 hover:text-[#F5A623] dark:bg-[#112240] dark:ring-[#1E3A52] dark:hover:bg-[#F5A623]/20 dark:hover:text-[#F5A623]">◀</button>
+      <button onClick={onNext} aria-label="Next"
+        className="flex h-10 w-10 items-center justify-center rounded-full bg-white ring-1 ring-gray-200 shadow-sm transition hover:bg-amber-50 hover:text-[#F5A623] dark:bg-[#112240] dark:ring-[#1E3A52] dark:hover:bg-[#F5A623]/20 dark:hover:text-[#F5A623]">▶</button>
     </div>
   );
 }
@@ -260,122 +294,165 @@ function Skeleton({ n = 4, h = "h-52" }: { n?: number; h?: string }) {
   );
 }
 
+function SliderSkeleton({ n = 4, cls = "aspect-[4/3] w-56 sm:w-64" }: { n?: number; cls?: string }) {
+  return (
+    <div className="flex gap-4 overflow-hidden">
+      {[...Array(n)].map((_, i) => (
+        <div key={i} className={`${cls} shrink-0 animate-pulse rounded-2xl bg-gray-100 dark:bg-[#13293D]`} />
+      ))}
+    </div>
+  );
+}
+
 /* ============================================================
-   ✅ HYDRATION-SAFE PRODUCT CARD
-   - img hamesha render hota hai (conditional <div> swap nahi)
-   - wa.me me sahi number
-   - Score badge + used trust chips
-   - ✅ WATERMARK: image /api/watermark route se
+   ✅ PRODUCT CARD — BILKUL SHOPCONTENT WAALA (v4)
+   White card + image top (object-contain) + brand + price +
+   discount + WhatsApp cart icon + View Product button.
+   NO NESTED LINKS (hydration safe) — card ke andar apne
+   links hain, isliye card ko kabhi <Link> me wrap na karo!
 ============================================================ */
 function ProductCard({ p }: { p: Prod }) {
-  const score = getScore(p);
-  const scoreColor =
-    score >= 8 ? "bg-green-500" : score >= 6 ? "bg-amber-500" : "bg-red-500";
+  const oldPriceNum = p.oldPrice ? Number(String(p.oldPrice).replace(/[^0-9]/g, "")) : 0;
+  const newPriceNum = Number(String(p.price).replace(/[^0-9]/g, "")) || 0;
+  const discount = oldPriceNum > newPriceNum ? Math.round(((oldPriceNum - newPriceNum) / oldPriceNum) * 100) : 0;
 
-  const imgAlt = `${p.title}${p.condition ? ` — ${p.condition} condition ${score}/10` : ""} used auto part${p.model ? `, fits ${p.model}` : ""} — AutoBrothers Pakistan`;
+  const imgAlt = `${p.title}${p.condition ? ` — ${p.condition} condition` : ""} used auto part${p.model ? `, fits ${p.model}` : ""} — AutoBrothers Pakistan`;
+
+  /* ✅ WATERMARK — image seedha nahi, watermark route se */
+  const imgSrc = p.image ? wmSrc(p.image, 600, 70) : null;
+  const href = `/product/${p.slug || p._id}`;
 
   return (
-    <div className="group relative aspect-square overflow-hidden rounded-2xl bg-gray-100 shadow-sm ring-1 ring-gray-200/70 transition-all duration-500 hover:-translate-y-1 hover:shadow-2xl dark:bg-[#112240] dark:ring-white/[0.06]">
+    <div
+      className="group flex h-full flex-col overflow-hidden rounded-lg bg-white dark:bg-[#112240] border border-gray-200/80 dark:border-[#1E3A52] transition-all duration-300 hover:shadow-md dark:hover:shadow-black/40"
+      itemScope
+      itemType="https://schema.org/Product"
+    >
+      {/* IMAGE — apna Link (nested nahi) */}
+      <Link href={href} title={p.title}>
+        <div className="relative aspect-square overflow-hidden bg-white dark:bg-[#0D1F30]">
+          {imgSrc ? (
+            <img
+              src={imgSrc}
+              alt={imgAlt}
+              loading="lazy"
+              width={600}
+              height={600}
+              itemProp="image"
+              className="h-full w-full object-contain p-2 transition-transform duration-500 group-hover:scale-105"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <svg className="h-10 w-10 text-gray-200 dark:text-[#1E3A52]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M20 7.5v9a1.5 1.5 0 01-.75 1.3l-6.5 3.75a1.5 1.5 0 01-1.5 0L4.75 17.8A1.5 1.5 0 014 16.5v-9a1.5 1.5 0 01.75-1.3l6.5-3.75a1.5 1.5 0 011.5 0l6.5 3.75A1.5 1.5 0 0120 7.5z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 7.5L12 12l7.5-4.5M12 21v-9" />
+              </svg>
+            </div>
+          )}
+        </div>
+      </Link>
 
-      {/* ✅ img HAMESHA render — hydration safe (src khali toh invisible) */}
-      <img
-        src={p.image ? wmSrc(p.image, 800, 70) : ""}
-        alt={imgAlt}
-        loading="lazy"
-        width={800}
-        height={800}
-        className={`h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105 ${p.image ? "" : "hidden"}`}
-      />
-      {/* Placeholder — img na ho toh (dono sides pe same condition) */}
-      {!p.image && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-[#0D1F30] dark:to-[#13293D]">
-          <svg className="h-12 w-12 text-gray-300 dark:text-[#1E3A52]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M20 7.5v9a1.5 1.5 0 01-.75 1.3l-6.5 3.75a1.5 1.5 0 01-1.5 0L4.75 17.8A1.5 1.5 0 014 16.5v-9a1.5 1.5 0 01.75-1.3l6.5-3.75a1.5 1.5 0 011.5 0l6.5 3.75A1.5 1.5 0 0120 7.5z" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 7.5L12 12l7.5-4.5M12 21v-9" />
-          </svg>
+      {/* DETAILS */}
+      <div className="flex flex-1 flex-col gap-0.5 border-t border-gray-100 dark:border-[#1E3A52] p-3">
+        {/* Brand */}
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+          {p.brand || "AUTOBROTHERS"}
+        </p>
+
+        {/* Title — plain text (Link andar nahi) */}
+        <p className="line-clamp-2 text-[15px] font-semibold leading-snug text-gray-900 dark:text-white" itemProp="name">
+          {p.title}
+        </p>
+
+        {/* Price + WhatsApp cart */}
+        <div className="mt-auto flex items-center justify-between pt-2" itemProp="offers" itemScope itemType="https://schema.org/Offer">
+          <div>
+            <meta itemProp="priceCurrency" content="PKR" />
+            <meta itemProp="price" content={String(newPriceNum)} />
+            <p className="text-base font-bold text-gray-900 dark:text-white">
+              Rs.{newPriceNum.toLocaleString("en-PK")}
+            </p>
+            {discount > 0 && (
+              <p className="text-[10px] text-gray-400 line-through">
+                Rs.{oldPriceNum.toLocaleString("en-PK")}
+              </p>
+            )}
+          </div>
+
+          {p.inStock !== false && (
+            <a
+              href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(`Hi! I want to order: ${p.title} — Rs ${p.price}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Order on WhatsApp"
+              aria-label={`Order ${p.title}`}
+              className="flex h-8 w-8 items-center justify-center text-gray-400 transition hover:text-emerald-500"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="9" cy="21" r="1" />
+                <circle cx="20" cy="21" r="1" />
+                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+              </svg>
+            </a>
+          )}
+        </div>
+
+        {/* View Product */}
+        {p.inStock !== false && (
+          <Link
+            href={href}
+            className="mt-2 flex items-center justify-center gap-1.5 w-full rounded-lg border border-gray-300 dark:border-[#1E3A52] py-2 text-xs font-bold text-gray-700 dark:text-gray-300 transition hover:bg-[#F5A623] hover:border-[#F5A623] hover:text-white dark:hover:text-[#0A1929]"
+          >
+            View Product
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   ✅ CATEGORY CARD — slide cards (main categories + attached
+   categories dono ke liye same style)
+============================================================ */
+function CategoryCard({ title, img, href }: { title: string; img?: string; href: string }) {
+  return (
+    <Link
+      href={href}
+      className="group relative aspect-[4/3] w-56 shrink-0 snap-start overflow-hidden rounded-2xl shadow-md ring-1 ring-gray-200 transition-all duration-500 hover:-translate-y-1.5 hover:shadow-2xl hover:ring-[#F5A623]/50 sm:w-64 dark:ring-[#1E3A52]"
+    >
+      {img ? (
+        <img
+          src={wmSrc(img, 600, 70)}
+          alt={`Used ${title} auto parts — AutoBrothers Pakistan`}
+          loading="lazy"
+          className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#13293D] to-[#0A1929]">
+          <span className="text-4xl font-black text-[#F5A623]/30">
+            {title?.charAt(0)?.toUpperCase()}
+          </span>
         </div>
       )}
 
-      {/* HOVER OVERLAY */}
-      <div className="absolute inset-0 flex flex-col justify-between bg-gradient-to-t from-black/90 via-black/50 to-black/40 opacity-0 backdrop-blur-[2px] transition-all duration-400 group-hover:opacity-100">
+      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
 
-        <div className="flex items-start justify-between p-3">
-          {score > 0 && (
-            <span className={`rounded-lg px-2 py-1 text-[9px] font-black text-white backdrop-blur-md ${scoreColor}`}>
-              {score}/10
-            </span>
-          )}
-          {p.newArrival && (
-            <span className="rounded-lg bg-blue-500/90 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-white backdrop-blur-md">
-              New
-            </span>
-          )}
-        </div>
-
-        <div className="p-4">
-          {p.model && (
-            <p className="mb-1 text-[9px] font-black uppercase tracking-[0.2em] text-[#F5A623]">
-              {p.model}
-            </p>
-          )}
-
-          <p className="line-clamp-2 text-sm font-bold leading-snug text-white">
-            {p.title}
-          </p>
-
-          {/* ✅ Used trust chips */}
-          {(p.mileage || p.warranty || p.qualityChecked || p.japanImported) && (
-            <div className="mt-1.5 flex flex-wrap gap-1">
-              {p.mileage && (
-                <span className="rounded bg-white/15 px-1.5 py-0.5 text-[8px] font-bold text-white">🛣 {p.mileage}km</span>
-              )}
-              {p.warranty && (
-                <span className="rounded bg-white/15 px-1.5 py-0.5 text-[8px] font-bold text-white">🛡 {p.warranty}d</span>
-              )}
-              {p.qualityChecked && (
-                <span className="rounded bg-white/15 px-1.5 py-0.5 text-[8px] font-bold text-white">✅ Tested</span>
-              )}
-              {p.japanImported && (
-                <span className="rounded bg-white/15 px-1.5 py-0.5 text-[8px] font-bold text-white">🇯🇵 Japan</span>
-              )}
-            </div>
-          )}
-
-          <div className="mt-2 flex items-center justify-between gap-2">
-            <div>
-              <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-gray-400">Price</p>
-              <p className="text-lg font-black leading-tight text-[#F5A623]">
-                Rs {Number(p.price || 0).toLocaleString("en-PK")}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                /* ✅ NUMBER — seedha WhatsApp chat */
-                window.open(`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(`Hi! I'm interested in: ${p.title} — Rs ${p.price}`)}`, "_blank");
-              }}
-              aria-label={`Order ${p.title} on WhatsApp`}
-              className="flex h-10 items-center gap-1.5 rounded-xl bg-[#F5A623] px-4 text-[11px] font-black text-[#0A1929] shadow-lg shadow-[#F5A623]/30 transition-transform duration-300 hover:scale-105 active:scale-95">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-              </svg>
-              Order
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* MOBILE overlay */}
-      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/80 to-transparent p-3 sm:hidden">
-        <p className="line-clamp-1 text-[11px] font-bold text-white">{p.title}</p>
-        <p className="shrink-0 text-sm font-black text-[#F5A623]">
-          Rs {Number(p.price || 0).toLocaleString("en-PK")}
+      <div className="absolute inset-x-0 bottom-0 p-3.5 sm:p-4">
+        <h3 className="text-sm font-black text-white transition-colors group-hover:text-[#F5A623] sm:text-base">
+          {title}
+        </h3>
+        <p className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold text-gray-300 opacity-0 transition-all duration-300 group-hover:opacity-100">
+          Shop Now
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 12h14M12 5l7 7-7 7" />
+          </svg>
         </p>
       </div>
-    </div>
+    </Link>
   );
 }
 
@@ -488,22 +565,33 @@ function Hero() {
 }
 
 /* ============================================================
-   2. NEWS
+   2. NEWS (BLOG) ✅ v4 FIXES
+   - slug na ho to post skip (broken link kabhi nahi)
+   - image na ho to placeholder (khali safed patti nahi)
+   - posts hi na hon / query fail ho to section HIDE
+     (pehle skeleton hamesha ghoomta rehta tha)
 ============================================================ */
 type Post = { _id: string; title: string; slug: string; image?: string; date: string; desc?: string };
 
 function NewsSection() {
   const [posts, setPosts] = useState<Post[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     client.fetch<Post[]>(
-      `*[_type == "blog" && isPublished != false] | order(date desc) [0...4] {
+      `*[_type == "blog" && isPublished != false && defined(slug.current)] | order(date desc) [0...4] {
         _id, title, "slug": slug.current, desc,
         "image": img1.asset->url,
         date
       }`
-    ).then(setPosts).catch(() => {});
+    ).then((d) => {
+      setPosts((d || []).filter((p) => p.slug));
+      setLoaded(true);
+    }).catch(() => setLoaded(true));
   }, []);
+
+  /* ✅ khali hone par section gayab — skeleton forever fault fix */
+  if (loaded && posts.length === 0) return null;
 
   return (
     <section className="mx-auto max-w-6xl px-4 py-10">
@@ -514,15 +602,22 @@ function NewsSection() {
             <Link key={p._id} href={`/blog/${p.slug}`}>
               <div className="group h-full overflow-hidden rounded-2xl bg-white shadow-md shadow-gray-200/60 ring-1 ring-gray-100 transition-all duration-500 hover:-translate-y-1.5 hover:shadow-xl dark:bg-[#112240] dark:shadow-black/20 dark:ring-[#1E3A52] dark:hover:shadow-black/40">
                 <div className="overflow-hidden">
-                  {/* ✅ img hamesha — hydration safe | ✅ WATERMARK route se */}
-                  <img
-                    src={p.image ? wmSrc(p.image, 600, 70) : ""}
-                    alt={`${p.title} — AutoBrothers car care blog`}
-                    loading="lazy"
-                    width={600}
-                    height={300}
-                    className={`h-32 w-full object-cover transition-transform duration-500 group-hover:scale-105 ${p.image ? "" : "hidden"}`}
-                  />
+                  {p.image ? (
+                    /* ✅ WATERMARK route se */
+                    <img
+                      src={wmSrc(p.image, 600, 70)}
+                      alt={`${p.title} — AutoBrothers car care blog`}
+                      loading="lazy"
+                      width={600}
+                      height={300}
+                      className="h-32 w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                  ) : (
+                    /* ✅ image na ho to placeholder — khali jagah nahi */
+                    <div className="flex h-32 w-full items-center justify-center bg-gradient-to-br from-[#13293D] to-[#0A1929]">
+                      <span className="text-3xl">📰</span>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1 p-3.5">
                   <p className="text-[10px] font-bold uppercase tracking-wide text-[#F5A623]">{fmtDate(p.date)}</p>
@@ -539,20 +634,78 @@ function NewsSection() {
 }
 
 /* ============================================================
-   3. NEW ARRIVALS
+   3. MAIN CATEGORIES — News ke NEECHE, slide style ✅
+   - desktop: ◀▶ arrows | mobile: swipe (snap scroll)
+   - mainCategory docs na hon to section gayab
+============================================================ */
+function MainCategoriesSection() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [mainCats, setMainCats] = useState<MainCat[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    client.fetch<MainCat[]>(MAIN_CATS_QUERY)
+      .then((d) => { setMainCats(d || []); setLoaded(true); })
+      .catch(() => setLoaded(true));
+  }, []);
+
+  const scrollDir = (dir: 1 | -1) => ref.current?.scrollBy({ left: dir * 280, behavior: "smooth" });
+
+  const cats = mainCats.filter(
+    (c) => c?.title && c?.slug && !isJunk(norm(c.title))
+  );
+
+  if (loaded && cats.length === 0) return null;
+
+  return (
+    <section className="mx-auto max-w-6xl px-4 py-10">
+      <div className="mb-4 flex items-end justify-between gap-3">
+        <SectionHead
+          emoji="🏷️"
+          title="Main Categories"
+          sub="Japan imported parts ke main groups"
+          href="/shop"
+        />
+        <SliderArrows onPrev={() => scrollDir(-1)} onNext={() => scrollDir(1)} />
+      </div>
+
+      {cats.length === 0 ? (
+        <SliderSkeleton />
+      ) : (
+        <div
+          ref={ref}
+          className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {cats.map((c) => (
+            <CategoryCard
+              key={c._id}
+              title={c.title}
+              img={c.img}
+              href={`/shop?cat=${c.slug}`}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ============================================================
+   4. NEW ARRIVALS — grid, SHOP WAALA CARD (outer Link NAHI)
 ============================================================ */
 function NewArrivals() {
   const [prods, setProds] = useState<Prod[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     client.fetch<Prod[]>(
       `*[_type == "product" && newArrival == true] | order(_createdAt desc) [0...8] { ${PRODUCT_FIELDS} }`
     ).then((d) => {
-      if (d?.length) { setProds(d); return; }
+      if (d?.length) { setProds(d); setLoaded(true); return; }
       return client.fetch<Prod[]>(
         `*[_type == "product"] | order(_createdAt desc) [0...8] { ${PRODUCT_FIELDS} }`
-      ).then(setProds);
-    }).catch(() => {});
+      ).then((d2) => { setProds(d2 || []); setLoaded(true); });
+    }).catch(() => setLoaded(true));
   }, []);
 
   return (
@@ -562,9 +715,7 @@ function NewArrivals() {
         {prods.length === 0 ? <Skeleton n={4} /> : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {prods.map((p) => (
-              <Link key={p._id} href={`/product/${p.slug}`}>
-                <ProductCard p={p} />
-              </Link>
+              <ProductCard key={p._id} p={p} />
             ))}
           </div>
         )}
@@ -574,17 +725,109 @@ function NewArrivals() {
 }
 
 /* ============================================================
-   4. CATEGORIES — main category cards
+   5. FEATURED SLIDER ✅ v4 — NEW ARRIVALS KE NEECHE (upar shift)
+   - slide style: mobile swipe + snap, desktop arrows
+   - featured products na hon to section gayab (khali box nahi)
 ============================================================ */
-function CategoriesSection() {
-  const [cats, setCats] = useState<Cat[]>([]);
+function FeaturedSlider() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [prods, setProds] = useState<Prod[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    client.fetch<Cat[]>(CATS_QUERY).then(setCats).catch(() => {});
+    client.fetch<Prod[]>(
+      `*[_type == "product" && featured == true] | order(_createdAt desc) [0...20] { ${PRODUCT_FIELDS} }`
+    ).then((d) => { setProds(d || []); setLoaded(true); }).catch(() => setLoaded(true));
   }, []);
 
-  if (cats.length === 0) return null;
+  const scrollDir = (dir: 1 | -1) => ref.current?.scrollBy({ left: dir * 280, behavior: "smooth" });
 
+  if (loaded && prods.length === 0) return null;
+
+  return (
+    <section className="bg-gray-50 py-10 dark:bg-[#0D1F30]/60">
+      <div className="mx-auto max-w-6xl px-4">
+        <div className="mb-4 flex items-end justify-between gap-3">
+          <SectionHead emoji="🔥" title="Featured Products" sub="Hamari recommended picks" />
+          <SliderArrows onPrev={() => scrollDir(-1)} onNext={() => scrollDir(1)} />
+        </div>
+
+        {prods.length === 0 ? (
+          <SliderSkeleton cls="h-80 w-48 sm:w-56" />
+        ) : (
+          <div
+            ref={ref}
+            className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {prods.map((p) => (
+              <div key={p._id} className="w-48 shrink-0 snap-start sm:w-56">
+                <ProductCard p={p} />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* ============================================================
+   6. SHOP BY CATEGORY ✅ v4 — MAIN CATEGORY GROUPED SLIDE ROWS
+   - har main category ki apni row, uski attached categories
+     slider style me (mobile swipe + desktop arrows)
+   - mainCategory se attach na hui categories → "Other Categories"
+   - ✅ FALLBACK: Sanity me mainCategory docs/attach hi na hon
+     to purana flat grid (khali section kabhi nahi)
+============================================================ */
+function CategoryGroupRow({ main, subs, alt, emoji }: {
+  main: MainCat; subs: Cat[]; alt?: boolean; emoji?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const scrollDir = (dir: 1 | -1) => ref.current?.scrollBy({ left: dir * 280, behavior: "smooth" });
+  const viewAll = main.slug ? `/shop?cat=${main.slug}` : "/shop";
+
+  return (
+    <section className={`py-8 ${alt ? "bg-gray-50 dark:bg-[#0D1F30]/60" : ""}`}>
+      <div className="mx-auto max-w-6xl px-4">
+        <div className="mb-4 flex items-end justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-black text-slate-900 sm:text-xl dark:text-white">
+              {emoji || "🗂️"} {main.title}
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{subs.length} categories</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <SliderArrows onPrev={() => scrollDir(-1)} onNext={() => scrollDir(1)} />
+            <Link
+              href={viewAll}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 transition hover:border-[#F5A623] hover:bg-[#F5A623] hover:text-white dark:border-[#1E3A52] dark:bg-[#13293D] dark:text-gray-300 dark:hover:text-white"
+            >
+              View All
+            </Link>
+          </div>
+        </div>
+
+        {/* ✅ MOBILE FRIENDLY SLIDER — swipe + snap */}
+        <div
+          ref={ref}
+          className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {subs.map((s) => (
+            <CategoryCard
+              key={s._id}
+              title={s.title}
+              img={s.img}
+              href={`/shop?cat=${s.slug}`}
+            />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ---------- purana FLAT GRID — fallback (mainCategory attach na ho to) ---------- */
+function FlatCategoriesGrid({ cats }: { cats: Cat[] }) {
   return (
     <section id="categories" className="mx-auto max-w-6xl px-4 py-10">
       <SectionHead
@@ -593,45 +836,97 @@ function CategoriesSection() {
         sub="Apni car ke hisaab se parts chuno"
         href="/shop"
       />
-
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-        {cats.filter((c) => !isJunk((c.title || "").toLowerCase())).map((c) => (
-          <Link key={c._id} href={`/shop?cat=${c.slug}`}
-            className="group relative aspect-[4/3] overflow-hidden rounded-2xl shadow-md ring-1 ring-gray-200 transition-all duration-500 hover:-translate-y-1.5 hover:shadow-2xl hover:ring-[#F5A623]/50 dark:ring-[#1E3A52]">
-
-            {c.img ? (
-              <img src={wmSrc(c.img, 600, 70)} alt={`Used ${c.title} auto parts — AutoBrothers Pakistan`} loading="lazy"
-                className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" />
-            ) : (
-              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#13293D] to-[#0A1929]">
-                <span className="text-4xl font-black text-[#F5A623]/30">
-                  {c.title?.charAt(0)?.toUpperCase()}
-                </span>
-              </div>
-            )}
-
-            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
-
-            <div className="absolute inset-x-0 bottom-0 p-3.5 sm:p-4">
-              <h3 className="text-sm font-black text-white transition-colors group-hover:text-[#F5A623] sm:text-base">
-                {c.title}
-              </h3>
-              <p className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold text-gray-300 opacity-0 transition-all duration-300 group-hover:opacity-100">
-                Shop Now
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M5 12h14M12 5l7 7-7 7" />
-                </svg>
-              </p>
-            </div>
-          </Link>
+        {cats.map((c) => (
+          <CategoryCard
+            key={c._id}
+            title={c.title}
+            img={c.img}
+            href={`/shop?cat=${c.slug}`}
+          />
         ))}
       </div>
     </section>
   );
 }
 
+function CategoriesSection() {
+  const [mainCats, setMainCats] = useState<MainCat[]>([]);
+  const [cats, setCats] = useState<Cat[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      client.fetch<MainCat[]>(MAIN_CATS_QUERY).catch(() => [] as MainCat[]),
+      client.fetch<Cat[]>(CATS_QUERY).catch(() => [] as Cat[]),
+    ]).then(([mc, c]) => {
+      setMainCats(mc || []);
+      setCats(c || []);
+      setLoaded(true);
+    });
+  }, []);
+
+  if (!loaded) {
+    return (
+      <section id="categories" className="mx-auto max-w-6xl px-4 py-10">
+        <SectionHead emoji="📂" title="Shop by Category" href="/shop" />
+        <SliderSkeleton />
+      </section>
+    );
+  }
+
+  const goodCats = cats.filter(
+    (c) => c?.title && c?.slug && !isJunk(norm(c.title))
+  );
+  if (goodCats.length === 0) return null;
+
+  const goodMains = mainCats.filter(
+    (mc) => mc?.title && mc?.slug && !isJunk(norm(mc.title))
+  );
+
+  /* ✅ FALLBACK — mainCategory attach hi nahi to flat grid */
+  const groups = goodMains
+    .map((mc) => ({ main: mc, subs: goodCats.filter((c) => c.mainId === mc._id) }))
+    .filter((g) => g.subs.length > 0);
+
+  if (groups.length === 0) {
+    return <FlatCategoriesGrid cats={goodCats} />;
+  }
+
+  /* attach na hui / dangling mainId wali categories */
+  const otherCats = goodCats.filter(
+    (c) => !c.mainId || !goodMains.some((mc) => mc._id === c.mainId)
+  );
+
+  return (
+    <section id="categories" className="py-10">
+      <div className="mx-auto max-w-6xl px-4">
+        <SectionHead
+          emoji="📂"
+          title="Shop by Category"
+          sub="Main category chuno — uski categories slide me"
+          href="/shop"
+        />
+      </div>
+
+      {groups.map((g, i) => (
+        <CategoryGroupRow key={g.main._id} main={g.main} subs={g.subs} alt={i % 2 === 0} />
+      ))}
+
+      {otherCats.length > 0 && (
+        <CategoryGroupRow
+          main={{ _id: "other-cats", title: "Other Categories", slug: "", img: undefined }}
+          subs={otherCats}
+          alt={groups.length % 2 === 0}
+          emoji="🚗"
+        />
+      )}
+    </section>
+  );
+}
+
 /* ============================================================
-   4.5. VEHICLE SELECTOR
+   7. VEHICLE SELECTOR
 ============================================================ */
 function VehicleSection() {
   const [open, setOpen] = useState(false);
@@ -664,11 +959,10 @@ function VehicleSection() {
 }
 
 /* ============================================================
-   5. CATEGORY PRODUCT ROWS ✅ v3 — SUB-CATEGORIES KE SATH
-   - Har main category row ke sath uski sub-category chips
-     (chips pe click → shop me wahi sub-category khulti hai)
+   8. CATEGORY PRODUCT ROWS ✅ — SUB-CATEGORIES KE SATH
+   - Har category row ke sath uski sub-category chips
    - 4 categories pehle, baqi "View More Categories" pe
-   - Har row me 4 products
+   - Har row me 4 products (SHOP WAALA CARD)
 ============================================================ */
 const MAX_CATEGORY_ROWS = 4;   /* pehle kitni categories nazar aayen */
 const PRODUCTS_PER_ROW = 4;    /* har category row me kitne products */
@@ -689,12 +983,7 @@ function CategoryRow({ parent, alt }: { parent: ParentNode; alt?: boolean }) {
             sub={`${parent.prods.length} products`}
             href={`/shop?cat=${parent.slug}`}
           />
-          <div className="hidden shrink-0 gap-2 pb-1 sm:flex">
-            <button onClick={() => scrollDir(-1)} aria-label="Previous"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white ring-1 ring-gray-200 shadow-sm transition hover:bg-amber-50 hover:text-[#F5A623] dark:bg-[#112240] dark:ring-[#1E3A52] dark:hover:bg-[#F5A623]/20 dark:hover:text-[#F5A623]">◀</button>
-            <button onClick={() => scrollDir(1)} aria-label="Next"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white ring-1 ring-gray-200 shadow-sm transition hover:bg-amber-50 hover:text-[#F5A623] dark:bg-[#112240] dark:ring-[#1E3A52] dark:hover:bg-[#F5A623]/20 dark:hover:text-[#F5A623]">▶</button>
-          </div>
+          <SliderArrows onPrev={() => scrollDir(-1)} onNext={() => scrollDir(1)} />
         </div>
 
         {/* ✅ SUB-CATEGORY CHIPS — click → shop me wahi sub khulti hai */}
@@ -716,13 +1005,14 @@ function CategoryRow({ parent, alt }: { parent: ParentNode; alt?: boolean }) {
           </div>
         )}
 
-        <div ref={ref}
-          className="grid grid-cols-2 gap-4 sm:flex sm:snap-x sm:snap-mandatory sm:overflow-x-auto sm:pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* ✅ MOBILE: 2-col grid | SM+: slide (swipe + snap) */}
+        <div
+          ref={ref}
+          className="grid grid-cols-2 gap-4 sm:flex sm:snap-x sm:snap-mandatory sm:overflow-x-auto sm:pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
           {rowProds.map((p) => (
             <div key={p._id} className="sm:w-48 sm:shrink-0 sm:snap-start lg:w-56">
-              <Link href={`/product/${p.slug}`}>
-                <ProductCard p={p} />
-              </Link>
+              <ProductCard p={p} />
             </div>
           ))}
         </div>
@@ -778,9 +1068,7 @@ function CategoryProductRows() {
         <SectionHead emoji="🛒" title="All Products" sub="Latest used auto parts" href="/shop" />
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {allProds.slice(0, 8).map((p) => (
-            <Link key={p._id} href={`/product/${p.slug}`}>
-              <ProductCard p={p} />
-            </Link>
+            <ProductCard key={p._id} p={p} />
           ))}
         </div>
       </section>
@@ -824,54 +1112,7 @@ function CategoryProductRows() {
 }
 
 /* ============================================================
-   6. FEATURED SLIDER
-============================================================ */
-function FeaturedSlider() {
-  const ref = useRef<HTMLDivElement>(null);
-  const [prods, setProds] = useState<Prod[]>([]);
-
-  useEffect(() => {
-    client.fetch<Prod[]>(
-      `*[_type == "product" && featured == true] | order(_createdAt desc) [0...20] { ${PRODUCT_FIELDS} }`
-    ).then(setProds).catch(() => {});
-  }, []);
-
-  const scrollDir = (dir: 1 | -1) => ref.current?.scrollBy({ left: dir * 280, behavior: "smooth" });
-
-  return (
-    <section className="bg-gray-50 py-10 dark:bg-[#0D1F30]/60">
-      <div className="mx-auto max-w-6xl px-4">
-        <div className="flex items-end justify-between gap-3">
-          <SectionHead emoji="🔥" title="Featured Products" sub="Swipe karo ya arrows dabao" />
-          <div className="hidden shrink-0 gap-2 pb-1 sm:flex">
-            <button onClick={() => scrollDir(-1)} aria-label="Prev"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white ring-1 ring-gray-200 shadow-sm transition hover:bg-amber-50 hover:text-[#F5A623] dark:bg-[#112240] dark:ring-[#1E3A52] dark:hover:bg-[#F5A623]/20 dark:hover:text-[#F5A623]">◀</button>
-            <button onClick={() => scrollDir(1)} aria-label="Next"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white ring-1 ring-gray-200 shadow-sm transition hover:bg-amber-50 hover:text-[#F5A623] dark:bg-[#112240] dark:ring-[#1E3A52] dark:hover:bg-[#F5A623]/20 dark:hover:text-[#F5A623]">▶</button>
-          </div>
-        </div>
-
-        {prods.length === 0 ? (
-          <Empty text="Featured products nahi mile — admin panel se kisi product ko Featured ON karein." />
-        ) : (
-          <div ref={ref}
-            className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {prods.map((p) => (
-              <div key={p._id} className="w-48 shrink-0 snap-start sm:w-56">
-                <Link href={`/product/${p.slug}`}>
-                  <ProductCard p={p} />
-                </Link>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-/* ============================================================
-   7. SOCIAL PAGES
+   9. SOCIAL PAGES
 ============================================================ */
 const FB_URL = "https://www.facebook.com/profile.php?id=100064020401353";
 const IG_URL = "https://instagram.com/autobrothers.pk";
@@ -971,9 +1212,10 @@ function SocialPages() {
 }
 
 /* ============================================================
-   HOME — ✅ SPLASH overlay, content hamesha render (SEO)
-   ✅ Category rows ab SUB-CATEGORIES ke sath:
-      category name → sub-chips → 4 products → agli category...
+   HOME ✅ v4 — SECTION ORDER:
+   Hero → News → Main Categories → New Arrivals → FEATURED
+   → Shop by Category → Vehicle → Category Rows → Social
+   ✅ Splash overlay — content ke UPAR dikhta hai, block nahi
 ============================================================ */
 export default function HomeContent() {
   const [splashDone, setSplashDone] = useState(false);
@@ -986,7 +1228,6 @@ export default function HomeContent() {
 
   return (
     <div className="bg-white text-slate-900 dark:bg-[#0A1929] dark:text-white">
-      {/* ✅ Splash overlay — content ke UPAR dikhta hai, content block nahi karta */}
       {!splashDone && (
         <SplashScreen
           onFinish={() => {
@@ -999,11 +1240,13 @@ export default function HomeContent() {
       {/* ✅ Content HAMESHA render — SEO + hydration dono fix */}
       <Hero />
       <NewsSection />
+      <MainCategoriesSection />
       <NewArrivals />
+      {/* ✅ v4: Featured Products ab New Arrivals ke NEECHE */}
+      <FeaturedSlider />
       <CategoriesSection />
       <VehicleSection />
       <CategoryProductRows />
-      <FeaturedSlider />
       <SocialPages />
     </div>
   );
